@@ -44,12 +44,16 @@ app.*.map.json
 /android/app/profile
 /android/app/release
 
-# Flutter
+# Flutter build
 build/
 .dart_tool/
-generated_plugin_registrant.*
-*.cmake
-*.swift
-*.h
+.gradle/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+android/.gradle/
+*.lock
+*.bin
 *.cc
-
+*.h
+*.swift
+*.cmake

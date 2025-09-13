@@ -12,3 +12,13 @@ GeneratedPluginRegistrant.java
 key.properties
 **/*.keystore
 **/*.jks
+
+# Flutter
+build/
+.dart_tool/
+generated_plugin_registrant.*
+*.cmake
+*.swift
+*.h
+*.cc
+
