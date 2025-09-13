@@ -1,0 +1,200 @@
+----------BD----------
+
+-----PedidosSB-----
+
+---Usuarios---
+Id_Usuario (PK)
+*Nombre
+*Correo
+*Teléfono
+*Contraseña (hash)
+*Fecha_Registro
+*Id_Rol (FK)
+
+---Rol---
+*Id_Rol (PK)
+*Descripción
+
+---Empresa---
+*Id_Empresa (PK)
+*Estado (Abierto,cerrado)
+
+---Nombre_Empresa---
+*Descripción
+*Teléfono
+*Dirección
+*Id_Categoria_Empresa (FK)
+*Fecha_Registro
+
+---Categoria_Empresa---
+*Id_Categoria_Empresa (PK)
+*Nombre_Categoria
+
+---Menu---
+*Id_Menu (PK)
+*Id_Empresa (FK)
+*Nombre_Menu
+*Descripción
+
+---Productos---
+*Id_Producto (PK)
+*Id_Menu (FK)
+*Nombre_Producto
+*Descripción
+*Precio
+*Id_Categoria_Producto (FK)
+*Estado (Activo/Inactivo)
+
+---Categoria_Productos---
+*Id_Categoria_Producto (PK)
+*Nombre_Categoria
+
+---Pedido---
+*Id_Pedido (PK)
+*Id_Usuario (FK)
+*Id_Repartidor (FK, NULL si aún no se asigna)
+*Fecha_Pedido
+*Estado_Pedido (Pendiente, Preparando, En camino, Entregado, Cancelado)
+*Total
+
+---Detalle_Pedido---
+*Id_Detalle (PK)
+*Id_Pedido (FK)
+*Id_Producto (FK)
+*Cantidad
+*PrecioUnitario
+*Subtotal
+
+---Entrega_Pedido---
+*Id_Entrega (PK)
+*Id_Pedido (FK)
+*Fecha_Entrega
+*Hora_Entrega
+*Estado (En preparación, En camino, Entregado)
+
+---Direccion_Usuario---
+*Id_Direccion (PK)
+*Id_Usuario (FK)
+*Dirección
+
+---Repartidor---
+*Id_Repartidor (PK)
+*Nombre
+*Teléfono
+*Vehículo
+*Placa
+*Estado (Activo/Inactivo)
+
+---Pagos---
+*Id_Pago (PK)
+*Id_Pedido (FK)
+*Id_Tipo_Pago (FK)
+*Monto
+*Fecha_Pago
+*Estado (Pagado, Pendiente, Fallido)
+
+---Tipo_Pago---
+*Id_Tipo_Pago (PK)
+*Descripción (Efectivo, Tarjeta, Transferencia, etc.)
+
+---Reseñas---
+*Id_Reseña (PK)
+*Id_Usuario (FK)
+*Id_Empresa (FK)
+*Id_Pedido (FK)
+*Calificación (1-5)
+*Comentario
+*Fecha
+
+----------Vistas----------
+
+AEE=(Agregar,Editar,Eliminar)
+
+---Login---
+Iniciar sesión (correo + contraseña)
+Registro de usuario
+Recuperar contraseña
+
+
+-Usuario (Cliente)--
+Perfil Usuario
+Ver/editar datos personales
+Ver direcciones guardadas (AEE_Dirección)
+
+--Empresas--
+Listar empresas (por categoría)
+Ver menú de empresa seleccionada
+
+--Menú / Productos--
+Ver productos
+Agregar productos al carrito
+
+--Carrito--
+Ver carrito
+Editar cantidades
+Eliminar productos
+Confirmar pedido
+
+--Pedidos--
+Ver historial de pedidos
+Estado de pedido (preparando, en camino, entregado)
+Repartidor asignado (datos de contacto + ubicación en mapa si se conecta GPS)
+
+--Reseñas--
+Agregar reseña a empresa/pedido
+
+--Empresas (Rol Empresa)--
+Menú (AEE_Menu)
+Agregar menú
+Editar menú
+Eliminar menú
+
+--Productos (AEE_Productos)--
+Agregar producto
+Editar producto
+Eliminar producto
+
+--Repartidores (AEE_Repartidor)--
+Asignar repartidor propio o del sistema
+Gestionar disponibilidad de repartidores
+
+--Pedidos (AEE_Pedido)--
+Ver pedidos recibidos
+Actualizar estado (pendiente, preparando, listo)
+
+--Pagos (AEE_Pagos)--
+Consultar pagos recibidos
+Generar comprobantes
+
+--Direcciones (AEE_Direcciones)--
+Direcciones de sucursales de la empresa
+
+--Repartidor--
+-Pedidos-
+Ver pedidos asignados
+Aceptar/Rechazar pedido
+Cambiar estado (en camino, entregado)
+
+--Direcciones--
+Ver dirección de entrega
+Navegación (Google Maps API opcional)
+
+--Pagos--
+Ver pagos pendientes por pedidos entregados
+Marcar recibido
+
+---Administrador (Rol Admin)---
+--Empresas (AEE_Empresa)--
+Agregar empresa
+Editar empresa
+Eliminar empresa
+
+--Menús (AEE_Menu)--
+Supervisar menús de las empresas
+
+--Repartidores (AEE_Repartidor)--
+Registrar repartidores
+Gestionar estado (activo/inactivo)
+
+--Pagos (AEE_Pagos)--
+Supervisar pagos (empresa ↔ usuario ↔ repartidor)
