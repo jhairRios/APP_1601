@@ -5,3 +5,18 @@
 # Xcode-related
 **/dgph
 **/xcuserdata/
+
+# Flutter
+build/
+.dart_tool/
+.gradle/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+android/.gradle/
+*.lock
+*.bin
+*.cc
+*.h
+*.swift
+*.cmake
+
