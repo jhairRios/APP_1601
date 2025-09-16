@@ -5,24 +5,28 @@ class Restaurante {
   final String imagen;
   final String descripcion;
 
-  Restaurante({required this.nombre, required this.imagen, required this.descripcion});
+  Restaurante({
+    required this.nombre,
+    required this.imagen,
+    required this.descripcion,
+  });
 }
 
 final List<Restaurante> restaurantesEjemplo = [
   Restaurante(
     nombre: 'Pizza Express',
     imagen: 'https://images.unsplash.com/photo-1513104890138-7c749659a591',
-    descripcion: 'Las mejores pizzas artesanales.'
+    descripcion: 'Las mejores pizzas artesanales.',
   ),
   Restaurante(
     nombre: 'Sushi House',
     imagen: 'https://images.unsplash.com/photo-1543353071-873f17a7a088',
-    descripcion: 'Sushi fresco y delicioso.'
+    descripcion: 'Sushi fresco y delicioso.',
   ),
   Restaurante(
     nombre: 'Burger Town',
     imagen: 'https://images.unsplash.com/photo-1550547660-d9450f859349',
-    descripcion: 'Hamburguesas premium.'
+    descripcion: 'Hamburguesas premium.',
   ),
 ];
 
@@ -32,9 +36,7 @@ class RestaurantesScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Restaurantes'),
-      ),
+      appBar: AppBar(title: const Text('Restaurantes')),
       body: ListView.builder(
         itemCount: restaurantesEjemplo.length,
         itemBuilder: (context, index) {
