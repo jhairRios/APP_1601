@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
+//import 'package:http/http.dart' as http;
 
 class LoginScreen extends StatelessWidget {
   const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
+
     // Colores de la paleta
     const Color colorFondo = Color(0xFF1D2828);
     const Color colorPrimario = Color(0xFFF4AC1E);
