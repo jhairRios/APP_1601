@@ -6,7 +6,6 @@ class LoginScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-
     // Colores de la paleta
     const Color colorFondo = Color(0xFF1D2828);
     const Color colorPrimario = Color(0xFFF4AC1E);

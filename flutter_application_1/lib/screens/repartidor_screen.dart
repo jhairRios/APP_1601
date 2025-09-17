@@ -1,15 +1,15 @@
 import 'package:flutter/material.dart';
 
-class RestaurantesScreen extends StatelessWidget {
-  const RestaurantesScreen({super.key});
+class RepartidorScreen extends StatelessWidget {
+  const RepartidorScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('Restaurantes')),
+      appBar: AppBar(title: const Text('Repartidor')),
       body: const Center(
         child: Text(
-          'Estás en la vista de Restaurantes',
+          'Estás en la vista de Repartidor',
           style: TextStyle(fontSize: 20),
         ),
       ),

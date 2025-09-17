@@ -1,5 +1,11 @@
 import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart';
+import 'screens/login_screen.dart';
+import 'screens/admin_screen.dart';
+import 'screens/empleado_screen.dart';
+import 'screens/repartidor_screen.dart';
+import 'screens/cliente_screen.dart';
+import 'screens/restaurantes_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -17,7 +23,16 @@ class MyApp extends StatelessWidget {
           seedColor: const Color.fromARGB(255, 0, 0, 0),
         ),
       ),
-      home: const SplashScreen(),
+      initialRoute: '/',
+      routes: {
+        '/': (context) => const SplashScreen(),
+        '/login': (context) => const LoginScreen(),
+        '/admin': (context) => const AdminScreen(),
+        '/empleado': (context) => const EmpleadoScreen(),
+        '/repartidor': (context) => const RepartidorScreen(),
+        '/cliente': (context) => const ClienteScreen(),
+        '/restaurantes': (context) => const RestaurantesScreen(),
+      },
     );
   }
 }
