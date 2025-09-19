@@ -1,17 +1,47 @@
 import 'package:flutter/material.dart';
 //import 'package:http/http.dart' as http;
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  final FocusNode _userFocusNode = FocusNode();
+  final FocusNode _passwordFocusNode = FocusNode();
+  bool _userFocused = false;
+  bool _passwordFocused = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _userFocusNode.addListener(() {
+      setState(() {
+        _userFocused = _userFocusNode.hasFocus;
+      });
+    });
+    _passwordFocusNode.addListener(() {
+      setState(() {
+        _passwordFocused = _passwordFocusNode.hasFocus;
+      });
+    });
+  }
+
+  @override
+  void dispose() {
+    _userFocusNode.dispose();
+    _passwordFocusNode.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     // Colores de la paleta
-    const Color colorFondo = Color(0xFF1D2828);
-    const Color colorPrimario = Color(0xFFF4AC1E);
-    const Color colorSecundario = Color(0xFF12C0E1);
-    const Color colorAcento = Color(0xFFF3343C);
-    const Color colorAmarilloClaro = Color(0xFFF3EC18);
+    const Color colorTexto = Color.fromARGB(255, 0, 0, 0);
+    const Color colorFondo = Color.fromARGB(255, 255, 255, 255);
+    const Color colorPrimario = Color.fromRGBO(0, 107, 166, 1);
 
     return Scaffold(
       backgroundColor: colorFondo,
@@ -24,7 +54,7 @@ class LoginScreen extends StatelessWidget {
             children: [
               // Logo
               Image.asset(
-                'assets/Pedidos.png',
+                'assets/LogoPinequitas.png',
                 height: 200,
                 fit: BoxFit.contain,
               ),
@@ -33,7 +63,7 @@ class LoginScreen extends StatelessWidget {
               Text(
                 'Bienvenido',
                 style: TextStyle(
-                  color: Colors.white,
+                  color: colorPrimario,
                   fontSize: 32,
                   fontWeight: FontWeight.bold,
                   letterSpacing: 1.2,
@@ -43,47 +73,79 @@ class LoginScreen extends StatelessWidget {
               const SizedBox(height: 8),
               Text(
                 'Inicia sesión para continuar',
-                style: TextStyle(color: Colors.white70, fontSize: 16),
+                style: TextStyle(color: colorPrimario, fontSize: 16),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               // Campo usuario
-              TextField(
-                style: const TextStyle(color: Colors.white),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: colorFondo.withOpacity(0.7),
-                  hintText: 'Usuario',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.person, color: colorSecundario),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorSecundario, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorAcento, width: 2),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: _userFocused
+                      ? [
+                          BoxShadow(
+                            color: colorPrimario.withOpacity(0.3),
+                            spreadRadius: 2,
+                            blurRadius: 8,
+                            offset: const Offset(0, 0),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: TextField(
+                  focusNode: _userFocusNode,
+                  style: const TextStyle(color: colorTexto),
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    hintText: 'Usuario',
+                    hintStyle: const TextStyle(color: colorTexto),
+                    prefixIcon: Icon(Icons.person, color: colorPrimario),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: colorPrimario, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: colorPrimario, width: 2),
+                    ),
                   ),
                 ),
               ),
               const SizedBox(height: 20),
               // Campo contraseña
-              TextField(
-                style: const TextStyle(color: Colors.white),
-                obscureText: true,
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: colorFondo.withOpacity(0.7),
-                  hintText: 'Contraseña',
-                  hintStyle: const TextStyle(color: Colors.white54),
-                  prefixIcon: Icon(Icons.lock, color: colorSecundario),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorSecundario, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorAcento, width: 2),
+              Container(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: _passwordFocused
+                      ? [
+                          BoxShadow(
+                            color: colorPrimario.withOpacity(0.3),
+                            spreadRadius: 2,
+                            blurRadius: 8,
+                            offset: const Offset(0, 0),
+                          ),
+                        ]
+                      : [],
+                ),
+                child: TextField(
+                  focusNode: _passwordFocusNode,
+                  style: const TextStyle(color: colorTexto),
+                  obscureText: true,
+                  decoration: InputDecoration(
+                    filled: true,
+                    fillColor: Colors.white,
+                    hintText: 'Contraseña',
+                    hintStyle: const TextStyle(color: colorTexto),
+                    prefixIcon: Icon(Icons.lock, color: colorPrimario),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: colorPrimario, width: 1.5),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(16),
+                      borderSide: BorderSide(color: colorPrimario, width: 2),
+                    ),
                   ),
                 ),
               ),
@@ -96,7 +158,7 @@ class LoginScreen extends StatelessWidget {
                   child: Text(
                     '¿Olvidaste tu contraseña?',
                     style: TextStyle(
-                      color: colorAmarilloClaro,
+                      color: colorPrimario,
                       fontWeight: FontWeight.w500,
                     ),
                   ),

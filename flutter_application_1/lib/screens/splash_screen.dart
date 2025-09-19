@@ -6,8 +6,8 @@ class SplashScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const Color colorFondo = Color(0xFF1D2828);
-    const Color colorPrimario = Color(0xFFF4AC1E);
+    const Color colorFondo = Color.fromARGB(255, 255, 255, 255);
+    const Color colorPrimario = Color.fromRGBO(0, 20, 34, 1);
     return Scaffold(
       backgroundColor: colorFondo,
       body: Center(
@@ -15,7 +15,14 @@ class SplashScreen extends StatelessWidget {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             // Logo
-            Image.asset('assets/Pedidos.png', height: 200, fit: BoxFit.contain),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(16),
+              child: Image.asset(
+                'assets/LogoPinequitas.png',
+                height: 200,
+                fit: BoxFit.contain,
+              ),
+            ),
             const SizedBox(height: 40),
             SizedBox(
               width: 200,
