@@ -41,7 +41,7 @@ class _LoginScreenState extends State<LoginScreen> {
     // Colores de la paleta
     const Color colorTexto = Color.fromARGB(255, 0, 0, 0);
     const Color colorFondo = Color.fromARGB(255, 255, 255, 255);
-    const Color colorPrimario = Color.fromRGBO(0, 107, 166, 1);
+    const Color colorPrimario = Color.fromRGBO(0, 20, 34, 1);
 
     return Scaffold(
       backgroundColor: colorFondo,
@@ -53,12 +53,19 @@ class _LoginScreenState extends State<LoginScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               // Logo
-              Image.asset(
-                'assets/LogoPinequitas.png',
+              Container(
+                width: 200,
                 height: 200,
-                fit: BoxFit.contain,
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(16),
+                  image: DecorationImage(
+                    image: AssetImage('assets/LogoPinequitas.png'),
+                    fit: BoxFit.cover,
+                  ),
+                ),
               ),
-              const SizedBox(height: 32),
+              const SizedBox(height: 40),
+
               // Título
               Text(
                 'Bienvenido',

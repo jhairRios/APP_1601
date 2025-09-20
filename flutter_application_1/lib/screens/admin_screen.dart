@@ -10,12 +10,10 @@ class AdminScreen extends StatefulWidget {
 }
 
 class _AdminScreenState extends State<AdminScreen> {
-  // Paleta de colores
-  final Color colorFondo = const Color(0xFF1D2828);
-  final Color colorPrimario = const Color(0xFFF4AC1E);
-  final Color colorSecundario = const Color(0xFF12C0E1);
-  final Color colorAcento = const Color(0xFFF3343C);
-  final Color colorAmarilloClaro = const Color(0xFFF3EC18);
+  // Colores de la paleta
+  final Color colorTexto = const Color.fromARGB(255, 0, 0, 0);
+  final Color colorFondo = const Color.fromARGB(255, 255, 255, 255);
+  final Color colorPrimario = const Color.fromRGBO(0, 20, 34, 1);
 
   final TextEditingController _nombreController = TextEditingController();
   File? _logoFile;
@@ -54,31 +52,32 @@ class _AdminScreenState extends State<AdminScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              const Text(
+              Text(
                 'Agregar empresa',
                 style: TextStyle(
                   fontSize: 22,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: colorPrimario,
                 ),
+                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 16),
               TextField(
                 controller: _nombreController,
-                style: const TextStyle(color: Colors.white),
+                style: TextStyle(color: colorTexto),
                 decoration: InputDecoration(
-                  labelText: 'Nombre de la empresa',
-                  labelStyle: const TextStyle(color: Colors.white70),
                   filled: true,
-                  fillColor: colorFondo.withOpacity(0.7),
-                  border: const OutlineInputBorder(),
+                  fillColor: Colors.white,
+                  hintText: 'Nombre de la empresa',
+                  hintStyle: TextStyle(color: colorTexto),
+                  prefixIcon: Icon(Icons.business, color: colorPrimario),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorSecundario, width: 1.5),
+                    borderSide: BorderSide(color: colorPrimario, width: 1.5),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorAcento, width: 2),
+                    borderSide: BorderSide(color: colorPrimario, width: 2),
                   ),
                 ),
               ),
@@ -88,7 +87,7 @@ class _AdminScreenState extends State<AdminScreen> {
                   ElevatedButton(
                     onPressed: _pickLogo,
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: colorSecundario,
+                      backgroundColor: colorPrimario,
                       foregroundColor: Colors.white,
                       shape: RoundedRectangleBorder(
                         borderRadius: BorderRadius.circular(16),
@@ -104,24 +103,18 @@ class _AdminScreenState extends State<AdminScreen> {
                           height: 50,
                           fit: BoxFit.cover,
                         )
-                      : Text(
-                          'Sin logo',
-                          style: TextStyle(color: Colors.white70),
-                        ),
+                      : Text('Sin logo', style: TextStyle(color: colorTexto)),
                 ],
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<String>(
                 value: _categoriaSeleccionada,
-                dropdownColor: colorFondo,
+                dropdownColor: Colors.white,
                 items: _categorias
                     .map(
                       (cat) => DropdownMenuItem(
                         value: cat,
-                        child: Text(
-                          cat,
-                          style: const TextStyle(color: Colors.white),
-                        ),
+                        child: Text(cat, style: TextStyle(color: colorTexto)),
                       ),
                     )
                     .toList(),
@@ -131,18 +124,18 @@ class _AdminScreenState extends State<AdminScreen> {
                   });
                 },
                 decoration: InputDecoration(
-                  labelText: 'Categoría',
-                  labelStyle: const TextStyle(color: Colors.white70),
                   filled: true,
-                  fillColor: colorFondo.withOpacity(0.7),
-                  border: const OutlineInputBorder(),
+                  fillColor: Colors.white,
+                  hintText: 'Categoría',
+                  hintStyle: TextStyle(color: colorTexto),
+                  prefixIcon: Icon(Icons.category, color: colorPrimario),
                   enabledBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorSecundario, width: 1.5),
+                    borderSide: BorderSide(color: colorPrimario, width: 1.5),
                   ),
                   focusedBorder: OutlineInputBorder(
                     borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorAcento, width: 2),
+                    borderSide: BorderSide(color: colorPrimario, width: 2),
                   ),
                 ),
               ),
@@ -173,12 +166,12 @@ class _AdminScreenState extends State<AdminScreen> {
                 child: const Text('Agregar empresa'),
               ),
               const SizedBox(height: 32),
-              const Text(
+              Text(
                 'Empresas registradas:',
                 style: TextStyle(
                   fontSize: 18,
                   fontWeight: FontWeight.bold,
-                  color: Colors.white,
+                  color: colorPrimario,
                 ),
               ),
               const SizedBox(height: 8),
