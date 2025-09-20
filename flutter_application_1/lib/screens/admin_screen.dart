@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
-import 'dart:io';
+import 'empresa_screen.dart';
+import 'usuario_screen.dart';
+import 'menu_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -14,28 +15,6 @@ class _AdminScreenState extends State<AdminScreen> {
   final Color colorTexto = const Color.fromARGB(255, 0, 0, 0);
   final Color colorFondo = const Color.fromARGB(255, 255, 255, 255);
   final Color colorPrimario = const Color.fromRGBO(0, 20, 34, 1);
-
-  final TextEditingController _nombreController = TextEditingController();
-  File? _logoFile;
-  String? _categoriaSeleccionada;
-  final List<String> _categorias = [
-    'Comida rápida',
-    'Sushi',
-    'Pizzería',
-    'Cafetería',
-    'Otros',
-  ];
-  final List<Map<String, dynamic>> _empresas = [];
-
-  Future<void> _pickLogo() async {
-    final picker = ImagePicker();
-    final pickedFile = await picker.pickImage(source: ImageSource.gallery);
-    if (pickedFile != null) {
-      setState(() {
-        _logoFile = File(pickedFile.path);
-      });
-    }
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -53,147 +32,229 @@ class _AdminScreenState extends State<AdminScreen> {
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
               Text(
-                'Agregar empresa',
+                'Panel de Administración',
                 style: TextStyle(
-                  fontSize: 22,
+                  fontSize: 24,
                   fontWeight: FontWeight.bold,
                   color: colorPrimario,
                 ),
                 textAlign: TextAlign.center,
               ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _nombreController,
-                style: TextStyle(color: colorTexto),
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  hintText: 'Nombre de la empresa',
-                  hintStyle: TextStyle(color: colorTexto),
-                  prefixIcon: Icon(Icons.business, color: colorPrimario),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorPrimario, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorPrimario, width: 2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              Row(
-                children: [
-                  ElevatedButton(
-                    onPressed: _pickLogo,
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: colorPrimario,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                    ),
-                    child: const Text('Seleccionar logo'),
-                  ),
-                  const SizedBox(width: 16),
-                  _logoFile != null
-                      ? Image.file(
-                          _logoFile!,
-                          width: 50,
-                          height: 50,
-                          fit: BoxFit.cover,
-                        )
-                      : Text('Sin logo', style: TextStyle(color: colorTexto)),
-                ],
-              ),
-              const SizedBox(height: 16),
-              DropdownButtonFormField<String>(
-                value: _categoriaSeleccionada,
-                dropdownColor: Colors.white,
-                items: _categorias
-                    .map(
-                      (cat) => DropdownMenuItem(
-                        value: cat,
-                        child: Text(cat, style: TextStyle(color: colorTexto)),
-                      ),
-                    )
-                    .toList(),
-                onChanged: (value) {
-                  setState(() {
-                    _categoriaSeleccionada = value;
-                  });
-                },
-                decoration: InputDecoration(
-                  filled: true,
-                  fillColor: Colors.white,
-                  hintText: 'Categoría',
-                  hintStyle: TextStyle(color: colorTexto),
-                  prefixIcon: Icon(Icons.category, color: colorPrimario),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorPrimario, width: 1.5),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(16),
-                    borderSide: BorderSide(color: colorPrimario, width: 2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 24),
-              ElevatedButton(
-                onPressed: () {
-                  if (_nombreController.text.isNotEmpty &&
-                      _categoriaSeleccionada != null) {
-                    setState(() {
-                      _empresas.add({
-                        'nombre': _nombreController.text,
-                        'logo': _logoFile,
-                        'categoria': _categoriaSeleccionada,
-                      });
-                      _nombreController.clear();
-                      _logoFile = null;
-                      _categoriaSeleccionada = null;
-                    });
-                  }
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorPrimario,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text('Agregar empresa'),
-              ),
               const SizedBox(height: 32),
-              Text(
-                'Empresas registradas:',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.bold,
-                  color: colorPrimario,
+
+              // Tarjeta de Gestión de Empresas
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colorPrimario.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        Icon(Icons.business, size: 48, color: colorPrimario),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Gestión de Empresas',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: colorTexto,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Administra las empresas registradas en el sistema',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colorTexto.withOpacity(0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const EmpresaScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorPrimario,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: const Text('Gestionar Empresas'),
+                        ),
+                      ],
+                    ),
+                  ),
                 ),
               ),
-              const SizedBox(height: 8),
-              ..._empresas.map(
-                (empresa) => Card(
-                  color: Colors.white,
-                  child: ListTile(
-                    leading: empresa['logo'] != null
-                        ? Image.file(
-                            empresa['logo'],
-                            width: 40,
-                            height: 40,
-                            fit: BoxFit.cover,
-                          )
-                        : null,
-                    title: Text(
-                      empresa['nombre'] ?? '',
-                      style: const TextStyle(color: Colors.black),
+
+              const SizedBox(height: 20),
+
+              // Tarjeta de Gestión de Usuarios
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colorPrimario.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        Icon(Icons.people, size: 48, color: colorPrimario),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Gestión de Usuarios',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: colorTexto,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Administra usuarios y asigna roles (Admin, Empleado, Repartidor)',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colorTexto.withOpacity(0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const UsuarioScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorPrimario,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: const Text('Gestionar Usuarios'),
+                        ),
+                      ],
                     ),
-                    subtitle: Text(
-                      'Categoría: ${empresa['categoria'] ?? ''}',
-                      style: const TextStyle(color: Colors.black54),
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 20),
+
+              // Tarjeta de Gestión de Menú
+              Card(
+                elevation: 4,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: Container(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(16),
+                    color: Colors.white,
+                    boxShadow: [
+                      BoxShadow(
+                        color: colorPrimario.withOpacity(0.3),
+                        blurRadius: 8,
+                        offset: const Offset(0, 4),
+                      ),
+                    ],
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      children: [
+                        Icon(
+                          Icons.restaurant_menu,
+                          size: 48,
+                          color: colorPrimario,
+                        ),
+                        const SizedBox(height: 16),
+                        Text(
+                          'Gestión de Menú',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: colorTexto,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          'Administra platos, categorías y precios del menú',
+                          style: TextStyle(
+                            fontSize: 14,
+                            color: colorTexto.withOpacity(0.7),
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () {
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (context) => const MenuScreen(),
+                              ),
+                            );
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorPrimario,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 24,
+                              vertical: 12,
+                            ),
+                          ),
+                          child: const Text('Gestionar Menú'),
+                        ),
+                      ],
                     ),
                   ),
                 ),
