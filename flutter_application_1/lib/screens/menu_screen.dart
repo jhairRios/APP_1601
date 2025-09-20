@@ -18,17 +18,17 @@ class _MenuScreenState extends State<MenuScreen> {
     {
       'nombre': 'Hamburguesa Clásica',
       'precio': 12.99,
-      'imagen': 'assets/Logo.png', // Placeholder image
+      'imagen': 'assets/LogoPinequitas.png', // Placeholder image
     },
     {
       'nombre': 'Pizza Margherita',
       'precio': 18.50,
-      'imagen': 'assets/Logo.png', // Placeholder image
+      'imagen': 'assets/LogoPinequitas.png', // Placeholder image
     },
     {
       'nombre': 'Ensalada César',
       'precio': 9.75,
-      'imagen': 'assets/Logo.png', // Placeholder image
+      'imagen': 'assets/LogoPinequitas.png', // Placeholder image
     },
   ];
 
