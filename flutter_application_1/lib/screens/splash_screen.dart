@@ -51,6 +51,28 @@ class SplashScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 16),
+            // Botón de Registro de Usuario
+            SizedBox(
+              width: 200,
+              height: 48,
+              child: OutlinedButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/registro');
+                },
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: colorPrimario,
+                  side: BorderSide(color: colorPrimario, width: 2),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(16),
+                  ),
+                ),
+                child: const Text(
+                  'Registrarse',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
             SizedBox(
               width: 200,
               height: 40,

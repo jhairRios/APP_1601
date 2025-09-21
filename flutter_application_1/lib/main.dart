@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'screens/splash_screen.dart';
 import 'screens/login_screen.dart';
+import 'screens/RegistroUsuario.dart';
 import 'screens/admin_screen.dart';
 import 'screens/empleado_screen.dart';
 import 'screens/repartidor_screen.dart';
@@ -30,6 +31,7 @@ class MyApp extends StatelessWidget {
       routes: {
         '/': (context) => const SplashScreen(),
         '/login': (context) => const LoginScreen(),
+        '/registro': (context) => const RegistroUsuarioScreen(),
         '/admin': (context) => const AdminScreen(),
         '/empleado': (context) => const EmpleadoScreen(),
         '/repartidor': (context) => const RepartidorScreen(),
