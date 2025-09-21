@@ -14,20 +14,17 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
   final TextEditingController _passwordController = TextEditingController();
   final TextEditingController _confirmPasswordController =
       TextEditingController();
-  final TextEditingController _telefonoController = TextEditingController();
 
   // ✅ ESTADOS para efectos visuales de foco
   final FocusNode _nombreFocusNode = FocusNode();
   final FocusNode _emailFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
   final FocusNode _confirmPasswordFocusNode = FocusNode();
-  final FocusNode _telefonoFocusNode = FocusNode();
 
   bool _nombreFocused = false;
   bool _emailFocused = false;
   bool _passwordFocused = false;
   bool _confirmPasswordFocused = false;
-  bool _telefonoFocused = false;
 
   @override
   void initState() {
@@ -53,11 +50,6 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
         _confirmPasswordFocused = _confirmPasswordFocusNode.hasFocus;
       });
     });
-    _telefonoFocusNode.addListener(() {
-      setState(() {
-        _telefonoFocused = _telefonoFocusNode.hasFocus;
-      });
-    });
   }
 
   @override
@@ -67,12 +59,10 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
     _emailController.dispose();
     _passwordController.dispose();
     _confirmPasswordController.dispose();
-    _telefonoController.dispose();
     _nombreFocusNode.dispose();
     _emailFocusNode.dispose();
     _passwordFocusNode.dispose();
     _confirmPasswordFocusNode.dispose();
-    _telefonoFocusNode.dispose();
     super.dispose();
   }
 
@@ -155,7 +145,6 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
     // Paleta de colores del diseño
     const Color colorFondo = Color.fromARGB(255, 248, 250, 252);
     const Color colorPrimario = Color.fromRGBO(0, 20, 34, 1);
-    const Color colorAccento = Color.fromARGB(255, 76, 175, 80);
 
     return Scaffold(
       backgroundColor: colorFondo,
@@ -280,17 +269,6 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                       ),
                       const SizedBox(height: 20),
 
-                      // Campo Teléfono
-                      _buildStyledTextField(
-                        controller: _telefonoController,
-                        focusNode: _telefonoFocusNode,
-                        focused: _telefonoFocused,
-                        hintText: 'Teléfono (opcional)',
-                        icon: Icons.phone_outlined,
-                        keyboardType: TextInputType.phone,
-                      ),
-                      const SizedBox(height: 20),
-
                       // Campo Contraseña
                       _buildStyledTextField(
                         controller: _passwordController,
@@ -312,39 +290,6 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                         obscureText: true,
                       ),
                       const SizedBox(height: 24),
-
-                      // Información del rol
-                      Container(
-                        padding: const EdgeInsets.all(16),
-                        decoration: BoxDecoration(
-                          color: colorAccento.withOpacity(0.1),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: colorAccento.withOpacity(0.3),
-                            width: 1,
-                          ),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.info_outline,
-                              color: colorAccento,
-                              size: 20,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(
-                                'Tu cuenta será creada con rol de Usuario',
-                                style: TextStyle(
-                                  color: colorAccento.withOpacity(0.8),
-                                  fontSize: 14,
-                                  fontWeight: FontWeight.w500,
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
                     ],
                   ),
                 ),
