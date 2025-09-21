@@ -164,36 +164,76 @@ class _LoginScreenState extends State<LoginScreen> {
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              // Logo
+              // ✅ ENCABEZADO CON LOGO (igual que registro de usuario)
               Container(
-                width: 200,
-                height: 200,
+                padding: const EdgeInsets.all(20),
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(16),
-                  image: DecorationImage(
-                    image: AssetImage('assets/LogoPinequitas.png'),
-                    fit: BoxFit.cover,
-                  ),
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(20),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 3,
+                      blurRadius: 10,
+                      offset: const Offset(0, 3),
+                    ),
+                  ],
                 ),
-              ),
-              const SizedBox(height: 40),
+                child: Column(
+                  children: [
+                    // Logo circular con borde elegante
+                    Container(
+                      width: 120,
+                      height: 120,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        border: Border.all(
+                          color: colorPrimario.withOpacity(0.2),
+                          width: 3,
+                        ),
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorPrimario.withOpacity(0.1),
+                            spreadRadius: 2,
+                            blurRadius: 8,
+                            offset: const Offset(0, 2),
+                          ),
+                        ],
+                      ),
+                      child: ClipOval(
+                        child: Image.asset(
+                          'assets/LogoPinequitas.png',
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 20),
 
-              // Título
-              Text(
-                'Bienvenido',
-                style: TextStyle(
-                  color: colorPrimario,
-                  fontSize: 32,
-                  fontWeight: FontWeight.bold,
-                  letterSpacing: 1.2,
+                    // Título principal
+                    Text(
+                      'Bienvenido',
+                      style: TextStyle(
+                        color: colorPrimario,
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 0.5,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 8),
+
+                    // Subtítulo
+                    Text(
+                      'Inicia sesión para continuar',
+                      style: TextStyle(
+                        color: Colors.grey[600],
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                  ],
                 ),
-                textAlign: TextAlign.center,
-              ),
-              const SizedBox(height: 8),
-              Text(
-                'Inicia sesión para continuar',
-                style: TextStyle(color: colorPrimario, fontSize: 16),
-                textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
               // Campo de email (antes era "usuario")

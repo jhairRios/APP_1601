@@ -24,9 +24,40 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       appBar: AppBar(
         backgroundColor: colorPrimario,
         foregroundColor: Colors.white,
-        title: const Text(
-          'Panel de Empleado',
-          style: TextStyle(fontWeight: FontWeight.bold),
+        title: Row(
+          children: [
+            // Logo circular con borde elegante (igual que registro de usuario)
+            Container(
+              width: 40,
+              height: 40,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.white.withOpacity(0.3),
+                  width: 2,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 1),
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/LogoPinequitas.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            const SizedBox(width: 12),
+            const Text(
+              'Panel de Empleado',
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+          ],
         ),
         elevation: 0,
         actions: [
