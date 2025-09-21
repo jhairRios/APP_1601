@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:http/http.dart'
     as http; // ✅ Importamos http para hacer peticiones a la API
 import 'dart:convert'; // ✅ Para convertir JSON
+import '../services/auth_service.dart'; // ✅ NUEVO: Importar servicio de Google
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -24,6 +25,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // ✅ NUEVOS ESTADOS para el login
   bool _isLoading = false; // Para mostrar el indicador de carga
   String _errorMessage = ''; // Para mostrar errores
+  bool _isGoogleLoading = false; // Para el loading del botón de Google
 
   @override
   void initState() {
@@ -144,6 +146,86 @@ class _LoginScreenState extends State<LoginScreen> {
       // ✅ FINALIZAR: Ocultar indicador de carga
       setState(() {
         _isLoading = false;
+      });
+    }
+  }
+
+  // ✅ NUEVA FUNCIÓN: Login con Google
+  Future<void> _googleLogin() async {
+    setState(() {
+      _errorMessage = '';
+      _isGoogleLoading = true;
+    });
+
+    try {
+      final result = await AuthService.signInWithGoogle();
+      
+      if (result['success']) {
+        // Login exitoso
+        final userRole = result['user']['role_id'];
+        final userName = result['user']['name'];
+
+        // Determinar ruta según rol (mismo sistema que el login tradicional)
+        String routeDestination;
+        switch (userRole) {
+          case 1:
+            routeDestination = '/admin';
+            break;
+          case 2:
+            routeDestination = '/usuario';
+            break;
+          case 3:
+            routeDestination = '/repartidor';
+            break;
+          case 4:
+            routeDestination = '/empleado';
+            break;
+          default:
+            routeDestination = '/usuario';
+        }
+
+        String descripcion;
+        switch (userRole) {
+          case 1:
+            descripcion = 'Administrador';
+            break;
+          case 2:
+            descripcion = 'Usuario';
+            break;
+          case 3:
+            descripcion = 'Repartidor';
+            break;
+          case 4:
+            descripcion = 'Empleado';
+            break;
+          default:
+            descripcion = 'Usuario';
+        }
+
+        // Navegar a la pantalla correspondiente
+        Navigator.pushReplacementNamed(context, routeDestination);
+
+        // Mostrar mensaje de bienvenida
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Bienvenido con Google, $userName! Rol: $descripcion'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // Login falló
+        setState(() {
+          _errorMessage = result['message'] ?? 'Error en el login con Google';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error con Google Sign-In: ${e.toString()}';
+      });
+    } finally {
+      setState(() {
+        _isGoogleLoading = false;
       });
     }
   }
@@ -379,6 +461,60 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 16),
+              
+              // ✅ NUEVO: Separador "O"
+              Row(
+                children: [
+                  Expanded(child: Divider(color: colorPrimario.withOpacity(0.3))),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: Text(
+                      'O',
+                      style: TextStyle(
+                        color: colorPrimario,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                  Expanded(child: Divider(color: colorPrimario.withOpacity(0.3))),
+                ],
+              ),
+              const SizedBox(height: 16),
+              
+              // ✅ NUEVO: Botón de Google Sign-In
+              SizedBox(
+                height: 50,
+                child: OutlinedButton.icon(
+                  onPressed: _isGoogleLoading ? null : _googleLogin,
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: colorPrimario,
+                    side: BorderSide(color: colorPrimario, width: 2),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                  ),
+                  icon: _isGoogleLoading
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : Icon(Icons.login, size: 20),
+                  label: Text(
+                    _isGoogleLoading 
+                        ? 'Conectando...' 
+                        : 'Continuar con Google',
+                    style: TextStyle(
+                      fontSize: 16, 
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
               // Pie de página opcional
               Text(
                 '© 2025 Pedidos1601',
