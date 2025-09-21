@@ -206,24 +206,6 @@ class SplashScreen extends StatelessWidget {
                 child: const Text('Vista Cliente'),
               ),
             ),
-            const SizedBox(height: 8),
-            SizedBox(
-              width: 200,
-              height: 40,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/restaurantes');
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorPrimario,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text('Vista Restaurantes'),
-              ),
-            ),
           ],
         ),
       ),

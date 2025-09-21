@@ -6,7 +6,6 @@ import 'screens/admin_screen.dart';
 import 'screens/empleado_screen.dart';
 import 'screens/repartidor_screen.dart';
 import 'screens/cliente_screen.dart';
-import 'screens/restaurantes_screen.dart';
 import 'screens/empresa_screen.dart';
 import 'screens/usuario_screen.dart';
 import 'screens/menu_screen.dart';
@@ -36,7 +35,6 @@ class MyApp extends StatelessWidget {
         '/empleado': (context) => const EmpleadoScreen(),
         '/repartidor': (context) => const RepartidorScreen(),
         '/cliente': (context) => const ClienteScreen(),
-        '/restaurantes': (context) => const RestaurantesScreen(),
         '/empresa': (context) => const EmpresaScreen(),
         '/usuario': (context) => const UsuarioScreen(),
         '/menu': (context) => const MenuScreen(),
