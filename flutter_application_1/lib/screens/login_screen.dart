@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http; // ✅ Importamos http para hacer peticiones a la API
+import 'package:http/http.dart'
+    as http; // ✅ Importamos http para hacer peticiones a la API
 import 'dart:convert'; // ✅ Para convertir JSON
 
 class LoginScreen extends StatefulWidget {
@@ -13,7 +14,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // ✅ CONTROLADORES para capturar texto de los campos
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
-  
+
   // ✅ ESTADOS para el foco de los campos (igual que antes)
   final FocusNode _userFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
@@ -60,7 +61,9 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // ✅ PETICIÓN HTTP: Enviamos email y password a la API
       final response = await http.post(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php', //Ruta Diany Enamorado
+        ),
         body: {
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
@@ -74,29 +77,29 @@ class _LoginScreenState extends State<LoginScreen> {
         // ✅ LOGIN EXITOSO: Obtener el rol del usuario
         final userRole = data['user']['role_id'];
         final userName = data['user']['name'];
-        
+
         // ✅ REDIRECCIÓN SEGÚN ROL: Navegar a la pantalla correspondiente
         String routeDestination;
         switch (userRole) {
           case 1:
-            routeDestination = '/admin';        // 👑 Administrador
+            routeDestination = '/admin'; // 👑 Administrador
             break;
           case 2:
-            routeDestination = '/usuario';     // 👨‍💼 Empleado
+            routeDestination = '/usuario'; // 👨‍💼 Empleado
             break;
           case 3:
-            routeDestination = '/repartidor';   // 🚗 Repartidor
+            routeDestination = '/repartidor'; // 🚗 Repartidor
             break;
           case 4:
-            routeDestination = '/empleado';      // 👤 Cliente
+            routeDestination = '/empleado'; // 👤 Cliente
             break;
           default:
-            routeDestination = '/usuario';      // 🔧 Rol desconocido
+            routeDestination = '/usuario'; // 🔧 Rol desconocido
         }
 
         String Descripcion;
-        switch(userRole){
-          case 1: 
+        switch (userRole) {
+          case 1:
             Descripcion = 'Administrador';
             break;
           case 2:
@@ -108,13 +111,13 @@ class _LoginScreenState extends State<LoginScreen> {
           case 4:
             Descripcion = 'Empleado';
             break;
-          default: 
+          default:
             Descripcion = 'Usuario';
         }
-        
+
         // ✅ NAVEGAR: Ir a la pantalla correspondiente y limpiar el stack
         Navigator.pushReplacementNamed(context, routeDestination);
-        
+
         // ✅ OPCIONAL: Mostrar mensaje de bienvenida
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -208,14 +211,18 @@ class _LoginScreenState extends State<LoginScreen> {
                 child: TextField(
                   controller: _emailController, // ✅ CONECTAR controlador
                   focusNode: _userFocusNode,
-                  keyboardType: TextInputType.emailAddress, // ✅ Teclado para email
+                  keyboardType:
+                      TextInputType.emailAddress, // ✅ Teclado para email
                   style: const TextStyle(color: colorTexto),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.white,
                     hintText: 'Email', // ✅ CAMBIAR de "Usuario" a "Email"
                     hintStyle: const TextStyle(color: colorTexto),
-                    prefixIcon: Icon(Icons.email, color: colorPrimario), // ✅ CAMBIAR icono
+                    prefixIcon: Icon(
+                      Icons.email,
+                      color: colorPrimario,
+                    ), // ✅ CAMBIAR icono
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(color: colorPrimario, width: 1.5),
@@ -266,7 +273,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 12),
-              
+
               // ✅ MENSAJE DE ERROR: Mostrar errores de login
               if (_errorMessage.isNotEmpty)
                 Container(
@@ -279,18 +286,25 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   child: Row(
                     children: [
-                      Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+                      Icon(
+                        Icons.error_outline,
+                        color: Colors.red[700],
+                        size: 20,
+                      ),
                       const SizedBox(width: 8),
                       Expanded(
                         child: Text(
                           _errorMessage,
-                          style: TextStyle(color: Colors.red[700], fontSize: 14),
+                          style: TextStyle(
+                            color: Colors.red[700],
+                            fontSize: 14,
+                          ),
                         ),
                       ),
                     ],
                   ),
                 ),
-              
+
               // ¿Olvidaste tu contraseña?
               Align(
                 alignment: Alignment.centerRight,
@@ -310,7 +324,9 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: _isLoading ? null : _login, // ✅ CONECTAR función de login
+                  onPressed: _isLoading
+                      ? null
+                      : _login, // ✅ CONECTAR función de login
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorPrimario,
                     foregroundColor: Colors.white,
@@ -319,7 +335,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     elevation: 4,
                   ),
-                  child: _isLoading // ✅ MOSTRAR loading o texto
+                  child:
+                      _isLoading // ✅ MOSTRAR loading o texto
                       ? const SizedBox(
                           width: 20,
                           height: 20,
@@ -330,7 +347,10 @@ class _LoginScreenState extends State<LoginScreen> {
                         )
                       : const Text(
                           'Iniciar sesión',
-                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                 ),
               ),
