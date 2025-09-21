@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
-//import 'package:http/http.dart' as http;
+import 'package:http/http.dart' as http; // ✅ Importamos http para hacer peticiones a la API
+import 'dart:convert'; // ✅ Para convertir JSON
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -9,10 +10,19 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
+  // ✅ CONTROLADORES para capturar texto de los campos
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  
+  // ✅ ESTADOS para el foco de los campos (igual que antes)
   final FocusNode _userFocusNode = FocusNode();
   final FocusNode _passwordFocusNode = FocusNode();
   bool _userFocused = false;
   bool _passwordFocused = false;
+
+  // ✅ NUEVOS ESTADOS para el login
+  bool _isLoading = false; // Para mostrar el indicador de carga
+  String _errorMessage = ''; // Para mostrar errores
 
   @override
   void initState() {
@@ -31,9 +41,105 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   void dispose() {
+    // ✅ LIMPIEZA: Liberar memoria de los controladores y focus nodes
+    _emailController.dispose();
+    _passwordController.dispose();
     _userFocusNode.dispose();
     _passwordFocusNode.dispose();
     super.dispose();
+  }
+
+  // ✅ FUNCIÓN DE LOGIN: Envía credenciales a la API PHP
+  Future<void> _login() async {
+    // Limpiar mensajes de error previos
+    setState(() {
+      _errorMessage = '';
+      _isLoading = true; // Mostrar indicador de carga
+    });
+
+    try {
+      // ✅ PETICIÓN HTTP: Enviamos email y password a la API
+      final response = await http.post(
+        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php'),
+        body: {
+          'email': _emailController.text.trim(),
+          'password': _passwordController.text,
+        },
+      );
+
+      // ✅ PROCESAR RESPUESTA: Convertir JSON de respuesta
+      final data = json.decode(response.body);
+
+      if (data['success']) {
+        // ✅ LOGIN EXITOSO: Obtener el rol del usuario
+        final userRole = data['user']['role_id'];
+        final userName = data['user']['name'];
+        
+        // ✅ REDIRECCIÓN SEGÚN ROL: Navegar a la pantalla correspondiente
+        String routeDestination;
+        switch (userRole) {
+          case 1:
+            routeDestination = '/admin';        // 👑 Administrador
+            break;
+          case 2:
+            routeDestination = '/usuario';     // 👨‍💼 Empleado
+            break;
+          case 3:
+            routeDestination = '/repartidor';   // 🚗 Repartidor
+            break;
+          case 4:
+            routeDestination = '/empleado';      // 👤 Cliente
+            break;
+          default:
+            routeDestination = '/usuario';      // 🔧 Rol desconocido
+        }
+
+        String Descripcion;
+        switch(userRole){
+          case 1: 
+            Descripcion = 'Administrador';
+            break;
+          case 2:
+            Descripcion = 'Usuario';
+            break;
+          case 3:
+            Descripcion = 'Repartidor';
+            break;
+          case 4:
+            Descripcion = 'Empleado';
+            break;
+          default: 
+            Descripcion = 'Usuario';
+        }
+        
+        // ✅ NAVEGAR: Ir a la pantalla correspondiente y limpiar el stack
+        Navigator.pushReplacementNamed(context, routeDestination);
+        
+        // ✅ OPCIONAL: Mostrar mensaje de bienvenida
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Bienvenido, $userName! Rol: $Descripcion'),
+            backgroundColor: Colors.green,
+            duration: Duration(seconds: 2),
+          ),
+        );
+      } else {
+        // ✅ LOGIN FALLÓ: Mostrar mensaje de error
+        setState(() {
+          _errorMessage = data['message'] ?? 'Credenciales incorrectas';
+        });
+      }
+    } catch (e) {
+      // ✅ ERROR DE CONEXIÓN: Mostrar error de red
+      setState(() {
+        _errorMessage = 'Error de conexión: ${e.toString()}';
+      });
+    } finally {
+      // ✅ FINALIZAR: Ocultar indicador de carga
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   @override
@@ -84,7 +190,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 32),
-              // Campo usuario
+              // Campo de email (antes era "usuario")
               Container(
                 decoration: BoxDecoration(
                   borderRadius: BorderRadius.circular(16),
@@ -100,14 +206,16 @@ class _LoginScreenState extends State<LoginScreen> {
                       : [],
                 ),
                 child: TextField(
+                  controller: _emailController, // ✅ CONECTAR controlador
                   focusNode: _userFocusNode,
+                  keyboardType: TextInputType.emailAddress, // ✅ Teclado para email
                   style: const TextStyle(color: colorTexto),
                   decoration: InputDecoration(
                     filled: true,
                     fillColor: Colors.white,
-                    hintText: 'Usuario',
+                    hintText: 'Email', // ✅ CAMBIAR de "Usuario" a "Email"
                     hintStyle: const TextStyle(color: colorTexto),
-                    prefixIcon: Icon(Icons.person, color: colorPrimario),
+                    prefixIcon: Icon(Icons.email, color: colorPrimario), // ✅ CAMBIAR icono
                     enabledBorder: OutlineInputBorder(
                       borderRadius: BorderRadius.circular(16),
                       borderSide: BorderSide(color: colorPrimario, width: 1.5),
@@ -136,6 +244,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       : [],
                 ),
                 child: TextField(
+                  controller: _passwordController, // ✅ CONECTAR controlador
                   focusNode: _passwordFocusNode,
                   style: const TextStyle(color: colorTexto),
                   obscureText: true,
@@ -157,6 +266,31 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              
+              // ✅ MENSAJE DE ERROR: Mostrar errores de login
+              if (_errorMessage.isNotEmpty)
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  margin: const EdgeInsets.only(bottom: 12),
+                  decoration: BoxDecoration(
+                    color: Colors.red[50],
+                    border: Border.all(color: Colors.red[300]!),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(Icons.error_outline, color: Colors.red[700], size: 20),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage,
+                          style: TextStyle(color: Colors.red[700], fontSize: 14),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              
               // ¿Olvidaste tu contraseña?
               Align(
                 alignment: Alignment.centerRight,
@@ -176,7 +310,7 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 height: 50,
                 child: ElevatedButton(
-                  onPressed: () {},
+                  onPressed: _isLoading ? null : _login, // ✅ CONECTAR función de login
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorPrimario,
                     foregroundColor: Colors.white,
@@ -185,10 +319,19 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                     elevation: 4,
                   ),
-                  child: const Text(
-                    'Iniciar sesión',
-                    style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                  ),
+                  child: _isLoading // ✅ MOSTRAR loading o texto
+                      ? const SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        )
+                      : const Text(
+                          'Iniciar sesión',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        ),
                 ),
               ),
               const SizedBox(height: 16),
