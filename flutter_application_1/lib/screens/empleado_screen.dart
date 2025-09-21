@@ -239,41 +239,44 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Encabezado
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Gestión de Menú',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: colorPrimario,
+          Text(
+            'Gestión de Menú',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: colorPrimario,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Botón agregar
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // Agregar nuevo platillo
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorAccento,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  // Agregar nuevo platillo
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorAccento,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('Agregar'),
-              ),
-            ],
+              icon: const Icon(Icons.add),
+              label: const Text('Agregar Nuevo Platillo'),
+            ),
           ),
 
           const SizedBox(height: 20),
 
-          // Categorías
-          SizedBox(
-            height: 50,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          // Categorías con mejor scroll
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
               children: [
                 _buildCategoryChip('Todos', true, colorPrimario),
                 const SizedBox(width: 8),
@@ -284,6 +287,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 _buildCategoryChip('Bebidas', false, colorPrimario),
                 const SizedBox(width: 8),
                 _buildCategoryChip('Postres', false, colorPrimario),
+                const SizedBox(width: 8),
+                _buildCategoryChip('Sopas', false, colorPrimario),
+                const SizedBox(width: 8),
+                _buildCategoryChip('Ensaladas', false, colorPrimario),
+                const SizedBox(width: 8),
+                _buildCategoryChip('Especiales', false, colorPrimario),
               ],
             ),
           ),
@@ -319,41 +328,44 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // Encabezado
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Gestión de Pedidos',
-                style: TextStyle(
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                  color: colorPrimario,
+          Text(
+            'Gestión de Pedidos',
+            style: TextStyle(
+              fontSize: 24,
+              fontWeight: FontWeight.bold,
+              color: colorPrimario,
+            ),
+          ),
+
+          const SizedBox(height: 16),
+
+          // Botón nuevo pedido
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton.icon(
+              onPressed: () {
+                // Crear nuevo pedido
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: colorNaranja,
+                foregroundColor: Colors.white,
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
                 ),
               ),
-              ElevatedButton.icon(
-                onPressed: () {
-                  // Crear nuevo pedido
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorNaranja,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                ),
-                icon: const Icon(Icons.add),
-                label: const Text('Nuevo Pedido'),
-              ),
-            ],
+              icon: const Icon(Icons.add),
+              label: const Text('Crear Nuevo Pedido'),
+            ),
           ),
 
           const SizedBox(height: 20),
 
-          // Filtros de estado
-          SizedBox(
-            height: 50,
-            child: ListView(
-              scrollDirection: Axis.horizontal,
+          // Filtros de estado con mejor scroll
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
               children: [
                 _buildStatusChip('Todos', true, colorPrimario),
                 const SizedBox(width: 8),
@@ -363,7 +375,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 const SizedBox(width: 8),
                 _buildStatusChip('Listos', false, Colors.green),
                 const SizedBox(width: 8),
+                _buildStatusChip('En Entrega', false, Colors.purple),
+                const SizedBox(width: 8),
                 _buildStatusChip('Entregados', false, Colors.grey),
+                const SizedBox(width: 8),
+                _buildStatusChip('Cancelados', false, Colors.red),
               ],
             ),
           ),
@@ -422,18 +438,24 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           ),
           const SizedBox(height: 12),
 
-          SizedBox(
-            height: 120,
-            child: ListView.builder(
-              scrollDirection: Axis.horizontal,
-              itemCount: 4,
-              itemBuilder: (context, index) {
-                return _buildRepartidorCard(
-                  'Repartidor ${index + 1}',
-                  index % 2 == 0 ? 'Disponible' : 'En ruta',
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            padding: const EdgeInsets.symmetric(horizontal: 4),
+            child: Row(
+              children: [
+                _buildRepartidorCard('Juan Pérez', 'Disponible', colorAzul),
+                _buildRepartidorCard('María García', 'En ruta', colorAzul),
+                _buildRepartidorCard('Carlos López', 'Disponible', colorAzul),
+                _buildRepartidorCard('Ana Martínez', 'En ruta', colorAzul),
+                _buildRepartidorCard('Luis Rodríguez', 'Disponible', colorAzul),
+                _buildRepartidorCard(
+                  'Sofia Hernández',
+                  'Disponible',
                   colorAzul,
-                );
-              },
+                ),
+                _buildRepartidorCard('Miguel Torres', 'En ruta', colorAzul),
+                _buildRepartidorCard('Elena Vargas', 'Disponible', colorAzul),
+              ],
             ),
           ),
 
@@ -769,6 +791,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   Widget _buildRepartidorCard(String name, String status, Color colorAzul) {
     return Container(
       width: 140,
+      height: 120,
       margin: const EdgeInsets.only(right: 12),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -784,6 +807,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         ],
       ),
       child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
         children: [
           CircleAvatar(
             radius: 20,
@@ -793,16 +817,29 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           const SizedBox(height: 8),
           Text(
             name,
-            style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold),
+            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
             textAlign: TextAlign.center,
+            maxLines: 2,
+            overflow: TextOverflow.ellipsis,
           ),
-          Text(
-            status,
-            style: TextStyle(
-              fontSize: 12,
-              color: status == 'Disponible' ? Colors.green : Colors.orange,
+          const SizedBox(height: 4),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+            decoration: BoxDecoration(
+              color: status == 'Disponible'
+                  ? Colors.green.withOpacity(0.1)
+                  : Colors.orange.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
             ),
-            textAlign: TextAlign.center,
+            child: Text(
+              status,
+              style: TextStyle(
+                fontSize: 10,
+                color: status == 'Disponible' ? Colors.green : Colors.orange,
+                fontWeight: FontWeight.w500,
+              ),
+              textAlign: TextAlign.center,
+            ),
           ),
         ],
       ),
