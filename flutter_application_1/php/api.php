@@ -79,6 +79,52 @@ try {
         }
         // ========== FIN NUEVA FUNCIONALIDAD ==========
         
+        // ========== NUEVA FUNCIONALIDAD: REGISTRO DE USUARIO ==========
+        if ($action === 'register') {
+            // Obtener datos del formulario
+            $nombre = $_POST['nombre'] ?? '';
+            $email = $_POST['email'] ?? '';
+            $password = $_POST['password'] ?? '';
+            
+            // Validar que no estén vacíos
+            if (empty($nombre) || empty($email) || empty($password)) {
+                echo json_encode(['success' => false, 'message' => 'Todos los campos son requeridos']);
+                exit;
+            }
+            
+            // Verificar si el email ya existe
+            $stmt = $pdo->prepare("SELECT Id_Usuario FROM usuarios WHERE Correo = ?");
+            $stmt->execute([$email]);
+            
+            if ($stmt->fetch()) {
+                echo json_encode(['success' => false, 'message' => 'El email ya está registrado']);
+                exit;
+            }
+            
+            // Crear nuevo usuario
+            try {
+                $stmt = $pdo->prepare("INSERT INTO usuarios (Nombre, Correo, Contrasena, activo, Id_Rol) VALUES (?, ?, ?, 1, 2)");
+                $stmt->execute([$nombre, $email, $password]);
+                
+                $newUserId = $pdo->lastInsertId();
+                
+                echo json_encode([
+                    'success' => true,
+                    'message' => 'Usuario registrado exitosamente',
+                    'user' => [
+                        'id' => $newUserId,
+                        'name' => $nombre,
+                        'email' => $email,
+                        'role_id' => 2
+                    ]
+                ]);
+            } catch (PDOException $e) {
+                echo json_encode(['success' => false, 'message' => 'Error al registrar: ' . $e->getMessage()]);
+            }
+            exit;
+        }
+        // ========== FIN REGISTRO ==========
+        
         // Obtener datos del POST (login tradicional)
         $email = $_POST['email'] ?? '';
         $password = $_POST['password'] ?? '';

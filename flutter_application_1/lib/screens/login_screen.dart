@@ -52,6 +52,46 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
+  // ✅ FUNCIÓN REUTILIZABLE: Redirección por roles
+  void _redirectByRole(int userRole, String userName) {
+    String routeDestination;
+    String descripcion;
+    
+    switch (userRole) {
+      case 1:
+        routeDestination = '/admin';
+        descripcion = 'Administrador';
+        break;
+      case 2:
+        routeDestination = '/cliente';
+        descripcion = 'Usuario';
+        break;
+      case 3:
+        routeDestination = '/repartidor';
+        descripcion = 'Repartidor';
+        break;
+      case 4:
+        routeDestination = '/empleado';
+        descripcion = 'Empleado';
+        break;
+      default:
+        routeDestination = '/cliente';
+        descripcion = 'Cliente';
+    }
+
+    // Navegar a la pantalla correspondiente
+    Navigator.pushReplacementNamed(context, routeDestination);
+
+    // Mostrar mensaje de bienvenida
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('¡Bienvenido, $userName! Rol: $descripcion'),
+        backgroundColor: Colors.green,
+        duration: Duration(seconds: 2),
+      ),
+    );
+  }
+
   // ✅ FUNCIÓN DE LOGIN: Envía credenciales a la API PHP
   Future<void> _login() async {
     // Limpiar mensajes de error previos
@@ -65,8 +105,8 @@ class _LoginScreenState extends State<LoginScreen> {
       final response = await http.post(
         Uri.parse(
           //'http://localhost/APP_1601/flutter_application_1/php/api.php' //Ruta Diany Enamorado
-          //'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php' //Ruta Angel Perez
-          'http://localhost/Proyecto_APP/Proyecto_APP/flutter_application_1/php/api.php', //Ruta Jhair Rios
+          'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php' //Ruta Angel Perez
+          //'http://localhost/Proyecto_APP/Proyecto_APP/flutter_application_1/php/api.php', //Ruta Jhair Rios
           // //Ruta Derick Muñoz,
         ),
         body: {
@@ -83,54 +123,8 @@ class _LoginScreenState extends State<LoginScreen> {
         final userRole = data['user']['role_id'];
         final userName = data['user']['name'];
 
-        // ✅ REDIRECCIÓN SEGÚN ROL: Navegar a la pantalla correspondiente
-        String routeDestination;
-        switch (userRole) {
-          case 1:
-            routeDestination = '/admin'; // 👑 Administrador
-            break;
-          case 2:
-            routeDestination = '/usuario'; // 👨‍💼 Empleado
-            break;
-          case 3:
-            routeDestination = '/repartidor'; // 🚗 Repartidor
-            break;
-          case 4:
-            routeDestination = '/empleado'; // 👤 Cliente
-            break;
-          default:
-            routeDestination = '/usuario'; // 🔧 Rol desconocido
-        }
-
-        String Descripcion;
-        switch (userRole) {
-          case 1:
-            Descripcion = 'Administrador';
-            break;
-          case 2:
-            Descripcion = 'Usuario';
-            break;
-          case 3:
-            Descripcion = 'Repartidor';
-            break;
-          case 4:
-            Descripcion = 'Empleado';
-            break;
-          default:
-            Descripcion = 'Usuario';
-        }
-
-        // ✅ NAVEGAR: Ir a la pantalla correspondiente y limpiar el stack
-        Navigator.pushReplacementNamed(context, routeDestination);
-
-        // ✅ OPCIONAL: Mostrar mensaje de bienvenida
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('¡Bienvenido, $userName! Rol: $Descripcion'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // ✅ REDIRECCIÓN: Usar función reutilizable
+        _redirectByRole(userRole, userName);
       } else {
         // ✅ LOGIN FALLÓ: Mostrar mensaje de error
         setState(() {
@@ -165,54 +159,8 @@ class _LoginScreenState extends State<LoginScreen> {
         final userRole = result['user']['role_id'];
         final userName = result['user']['name'];
 
-        // Determinar ruta según rol (mismo sistema que el login tradicional)
-        String routeDestination;
-        switch (userRole) {
-          case 1:
-            routeDestination = '/admin';
-            break;
-          case 2:
-            routeDestination = '/usuario';
-            break;
-          case 3:
-            routeDestination = '/repartidor';
-            break;
-          case 4:
-            routeDestination = '/empleado';
-            break;
-          default:
-            routeDestination = '/usuario';
-        }
-
-        String descripcion;
-        switch (userRole) {
-          case 1:
-            descripcion = 'Administrador';
-            break;
-          case 2:
-            descripcion = 'Usuario';
-            break;
-          case 3:
-            descripcion = 'Repartidor';
-            break;
-          case 4:
-            descripcion = 'Empleado';
-            break;
-          default:
-            descripcion = 'Usuario';
-        }
-
-        // Navegar a la pantalla correspondiente
-        Navigator.pushReplacementNamed(context, routeDestination);
-
-        // Mostrar mensaje de bienvenida
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('¡Bienvenido con Google, $userName! Rol: $descripcion'),
-            backgroundColor: Colors.green,
-            duration: Duration(seconds: 2),
-          ),
-        );
+        // ✅ REDIRECCIÓN: Usar función reutilizable
+        _redirectByRole(userRole, userName);
       } else {
         // Login falló
         setState(() {
@@ -550,6 +498,32 @@ class _LoginScreenState extends State<LoginScreen> {
                       fontSize: 16, 
                       fontWeight: FontWeight.w600,
                     ),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              
+              // ✅ NUEVO: Enlace a registro
+              TextButton(
+                onPressed: () {
+                  Navigator.pushNamed(context, '/registro');
+                },
+                child: RichText(
+                  text: TextSpan(
+                    style: TextStyle(fontSize: 14),
+                    children: [
+                      TextSpan(
+                        text: '¿No tienes cuenta? ',
+                        style: TextStyle(color: Colors.grey[600]),
+                      ),
+                      TextSpan(
+                        text: 'Regístrate',
+                        style: TextStyle(
+                          color: colorPrimario,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
                 ),
               ),

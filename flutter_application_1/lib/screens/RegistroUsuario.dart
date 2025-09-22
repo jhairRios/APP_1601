@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/auth_service.dart';
 
 class RegistroUsuarioScreen extends StatefulWidget {
   const RegistroUsuarioScreen({super.key});
@@ -25,6 +26,10 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
   bool _emailFocused = false;
   bool _passwordFocused = false;
   bool _confirmPasswordFocused = false;
+  
+  // ✅ NUEVOS: Estados para registro
+  bool _isLoading = false;
+  String _errorMessage = '';
 
   @override
   void initState() {
@@ -64,6 +69,53 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
     _passwordFocusNode.dispose();
     _confirmPasswordFocusNode.dispose();
     super.dispose();
+  }
+
+  // ✅ NUEVA: Función de registro
+  Future<void> _register() async {
+    // Validaciones básicas
+    if (_passwordController.text != _confirmPasswordController.text) {
+      setState(() {
+        _errorMessage = 'Las contraseñas no coinciden';
+      });
+      return;
+    }
+
+    setState(() {
+      _errorMessage = '';
+      _isLoading = true;
+    });
+
+    try {
+      final result = await AuthService.registerUser(
+        nombre: _nombreController.text.trim(),
+        email: _emailController.text.trim(),
+        password: _passwordController.text,
+      );
+
+      if (result['success']) {
+        // Registro exitoso, regresar al login
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('¡Registro exitoso! Ya puedes iniciar sesión'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      } else {
+        setState(() {
+          _errorMessage = result['message'] ?? 'Error en el registro';
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _errorMessage = 'Error de conexión: $e';
+      });
+    } finally {
+      setState(() {
+        _isLoading = false;
+      });
+    }
   }
 
   // ✅ WIDGET REUTILIZABLE para campos de texto con diseño consistente
@@ -296,6 +348,25 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
 
                 const SizedBox(height: 32),
 
+                // ✅ MENSAJE DE ERROR
+                if (_errorMessage.isNotEmpty)
+                  Container(
+                    padding: EdgeInsets.all(12),
+                    margin: EdgeInsets.only(bottom: 16),
+                    decoration: BoxDecoration(
+                      color: Colors.red.shade50,
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Colors.red.shade300),
+                    ),
+                    child: Text(
+                      _errorMessage,
+                      style: TextStyle(
+                        color: Colors.red.shade700,
+                        fontSize: 14,
+                      ),
+                    ),
+                  ),
+
                 // ✅ BOTONES DE ACCIÓN
                 Column(
                   crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -323,9 +394,7 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                         ],
                       ),
                       child: ElevatedButton(
-                        onPressed: () {
-                          // Aquí iría la lógica de registro
-                        },
+                        onPressed: _isLoading ? null : _register,
                         style: ElevatedButton.styleFrom(
                           backgroundColor: Colors.transparent,
                           shadowColor: Colors.transparent,
@@ -333,15 +402,24 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: const Text(
-                          'Crear Cuenta',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 18,
-                            fontWeight: FontWeight.bold,
-                            letterSpacing: 0.5,
-                          ),
-                        ),
+                        child: _isLoading 
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : const Text(
+                                'Crear Cuenta',
+                                style: TextStyle(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  letterSpacing: 0.5,
+                                ),
+                              ),
                       ),
                     ),
 
