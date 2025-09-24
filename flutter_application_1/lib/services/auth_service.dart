@@ -4,7 +4,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 class AuthService {
   // URL de tu API PHP - MISMA URL que login_screen.dart
-  static const String _baseUrl = 'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php';
+  static const String _baseUrl = 'http://localhost/Proyecto/APP_1601/flutter_application_1/php/api.php';
   
   // Instancia de Google Sign In
   static final GoogleSignIn _googleSignIn = GoogleSignIn(
