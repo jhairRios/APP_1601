@@ -7,11 +7,20 @@ class ClienteScreen extends StatefulWidget {
   State<ClienteScreen> createState() => _ClienteScreenState();
 }
 
-class _ClienteScreenState extends State<ClienteScreen> {
+class _ClienteScreenState extends State<ClienteScreen>
+    with TickerProviderStateMixin {
   int _selectedIndex = 0;
   String _selectedCategory = 'Todos';
   List<Map<String, dynamic>> _cartItems = [];
   int _cartCount = 0;
+
+  // ✅ Controllers para animaciones
+  late AnimationController _fadeController;
+  late AnimationController _scaleController;
+  late AnimationController _slideController;
+  late Animation<double> _fadeAnimation;
+  late Animation<double> _scaleAnimation;
+  late Animation<Offset> _slideAnimation;
 
   // Categorías de productos
   final List<String> _categories = [
@@ -81,6 +90,65 @@ class _ClienteScreenState extends State<ClienteScreen> {
   ];
 
   @override
+  void initState() {
+    super.initState();
+    
+    // ✅ Inicializar controllers de animación
+    _fadeController = AnimationController(
+      duration: const Duration(milliseconds: 800),
+      vsync: this,
+    );
+    
+    _scaleController = AnimationController(
+      duration: const Duration(milliseconds: 300),
+      vsync: this,
+    );
+    
+    _slideController = AnimationController(
+      duration: const Duration(milliseconds: 600),
+      vsync: this,
+    );
+
+    // ✅ Crear animaciones
+    _fadeAnimation = Tween<double>(
+      begin: 0.0,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _fadeController,
+      curve: Curves.easeInOut,
+    ));
+
+    _scaleAnimation = Tween<double>(
+      begin: 0.8,
+      end: 1.0,
+    ).animate(CurvedAnimation(
+      parent: _scaleController,
+      curve: Curves.elasticOut,
+    ));
+
+    _slideAnimation = Tween<Offset>(
+      begin: const Offset(0, 0.5),
+      end: Offset.zero,
+    ).animate(CurvedAnimation(
+      parent: _slideController,
+      curve: Curves.easeOutCubic,
+    ));
+
+    // ✅ Iniciar animaciones
+    _fadeController.forward();
+    _scaleController.forward();
+    _slideController.forward();
+  }
+
+  @override
+  void dispose() {
+    _fadeController.dispose();
+    _scaleController.dispose();
+    _slideController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     // Paleta de colores
     const Color colorPrimario = Color.fromRGBO(0, 20, 34, 1);
@@ -143,24 +211,41 @@ class _ClienteScreenState extends State<ClienteScreen> {
                 Positioned(
                   right: 8,
                   top: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: colorRojo,
-                      shape: BoxShape.circle,
-                    ),
-                    constraints: const BoxConstraints(
-                      minWidth: 16,
-                      minHeight: 16,
-                    ),
-                    child: Text(
-                      '$_cartCount',
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.bold,
+                  child: AnimatedScale(
+                    scale: _cartCount > 0 ? 1.0 : 0.0,
+                    duration: const Duration(milliseconds: 300),
+                    curve: Curves.elasticOut,
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 200),
+                      padding: const EdgeInsets.all(4),
+                      decoration: BoxDecoration(
+                        color: colorRojo,
+                        shape: BoxShape.circle,
+                        boxShadow: [
+                          BoxShadow(
+                            color: colorRojo.withOpacity(0.3),
+                            spreadRadius: 2,
+                            blurRadius: 4,
+                          ),
+                        ],
                       ),
-                      textAlign: TextAlign.center,
+                      constraints: const BoxConstraints(
+                        minWidth: 16,
+                        minHeight: 16,
+                      ),
+                      child: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 200),
+                        child: Text(
+                          '$_cartCount',
+                          key: ValueKey<int>(_cartCount),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -175,13 +260,32 @@ class _ClienteScreenState extends State<ClienteScreen> {
           ),
         ],
       ),
-      body: IndexedStack(
-        index: _selectedIndex,
-        children: [
-          _buildMenuView(colorPrimario, colorNaranja, colorVerde),
-          _buildCartView(colorPrimario, colorNaranja, colorVerde),
-          _buildOrderStatusView(colorPrimario, colorVerde, colorNaranja),
-        ],
+      body: AnimatedSwitcher(
+        duration: const Duration(milliseconds: 300),
+        transitionBuilder: (Widget child, Animation<double> animation) {
+          return FadeTransition(
+            opacity: animation,
+            child: SlideTransition(
+              position: Tween<Offset>(
+                begin: const Offset(0.1, 0),
+                end: Offset.zero,
+              ).animate(CurvedAnimation(
+                parent: animation,
+                curve: Curves.easeInOut,
+              )),
+              child: child,
+            ),
+          );
+        },
+        child: IndexedStack(
+          key: ValueKey<int>(_selectedIndex),
+          index: _selectedIndex,
+          children: [
+            _buildMenuView(colorPrimario, colorNaranja, colorVerde),
+            _buildCartView(colorPrimario, colorNaranja, colorVerde),
+            _buildOrderStatusView(colorPrimario, colorVerde, colorNaranja),
+          ],
+        ),
       ),
       bottomNavigationBar: BottomNavigationBar(
         backgroundColor: Colors.white,
@@ -382,11 +486,33 @@ class _ClienteScreenState extends State<ClienteScreen> {
             itemCount: filteredItems.length,
             itemBuilder: (context, index) {
               final item = filteredItems[index];
-              return _buildMenuItemCard(
-                item,
-                colorPrimario,
-                colorNaranja,
-                colorVerde,
+              return AnimatedBuilder(
+                animation: _fadeAnimation,
+                builder: (context, child) {
+                  return FadeTransition(
+                    opacity: _fadeAnimation,
+                    child: SlideTransition(
+                      position: Tween<Offset>(
+                        begin: Offset(0, 0.3 + (index * 0.1)),
+                        end: Offset.zero,
+                      ).animate(CurvedAnimation(
+                        parent: _slideController,
+                        curve: Interval(
+                          (index * 0.1).clamp(0.0, 1.0),
+                          1.0,
+                          curve: Curves.easeOutCubic,
+                        ),
+                      )),
+                      child: _buildMenuItemCard(
+                        item,
+                        colorPrimario,
+                        colorNaranja,
+                        colorVerde,
+                        index,
+                      ),
+                    ),
+                  );
+                },
               );
             },
           ),
@@ -595,12 +721,18 @@ class _ClienteScreenState extends State<ClienteScreen> {
     Color colorPrimario,
     Color colorNaranja,
     Color colorVerde,
+    int index,
   ) {
     return GestureDetector(
       onTap: () {
+        // ✅ Animación de clic
+        _scaleController.reverse().then((_) {
+          _scaleController.forward();
+        });
         _showProductDetail(item, colorPrimario, colorNaranja, colorVerde);
       },
-      child: Container(
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(12),
@@ -616,33 +748,36 @@ class _ClienteScreenState extends State<ClienteScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Imagen del producto
+            // Imagen del producto con Hero animation
             Expanded(
               flex: 3,
-              child: Container(
-                width: double.infinity,
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
+              child: Hero(
+                tag: 'product_${item['id']}_${index}',
+                child: Container(
+                  width: double.infinity,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[200],
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
                   ),
-                ),
-                child: ClipRRect(
-                  borderRadius: const BorderRadius.only(
-                    topLeft: Radius.circular(12),
-                    topRight: Radius.circular(12),
-                  ),
-                  child: Image.asset(
-                    item['image'],
-                    fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.restaurant,
-                        size: 40,
-                        color: Colors.grey[400],
-                      );
-                    },
+                  child: ClipRRect(
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(12),
+                      topRight: Radius.circular(12),
+                    ),
+                    child: Image.asset(
+                      item['image'],
+                      fit: BoxFit.cover,
+                      errorBuilder: (context, error, stackTrace) {
+                        return Icon(
+                          Icons.restaurant,
+                          size: 40,
+                          color: Colors.grey[400],
+                        );
+                      },
+                    ),
                   ),
                 ),
               ),
@@ -685,7 +820,12 @@ class _ClienteScreenState extends State<ClienteScreen> {
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (context) => Container(
+      transitionAnimationController: AnimationController(
+        duration: const Duration(milliseconds: 500),
+        vsync: this,
+      ),
+      builder: (context) => AnimatedContainer(
+        duration: const Duration(milliseconds: 300),
         height: MediaQuery.of(context).size.height * 0.7,
         decoration: const BoxDecoration(
           color: Colors.white,
@@ -710,46 +850,69 @@ class _ClienteScreenState extends State<ClienteScreen> {
               ),
             ),
 
-            // Imagen grande del producto
-            Container(
-              height: 200,
-              width: double.infinity,
-              margin: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Colors.grey[200],
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: Image.asset(
-                  item['image'],
-                  fit: BoxFit.cover,
-                  errorBuilder: (context, error, stackTrace) {
-                    return Icon(
-                      Icons.restaurant,
-                      size: 80,
-                      color: Colors.grey[400],
-                    );
-                  },
+            // Imagen grande del producto con Hero animation
+            Hero(
+              tag: 'product_${item['id']}_detail',
+              child: Container(
+                height: 200,
+                width: double.infinity,
+                margin: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[200],
+                  borderRadius: BorderRadius.circular(16),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.black.withOpacity(0.1),
+                      spreadRadius: 2,
+                      blurRadius: 8,
+                      offset: const Offset(0, 4),
+                    ),
+                  ],
+                ),
+                child: ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Image.asset(
+                    item['image'],
+                    fit: BoxFit.cover,
+                    errorBuilder: (context, error, stackTrace) {
+                      return Icon(
+                        Icons.restaurant,
+                        size: 80,
+                        color: Colors.grey[400],
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
 
-            // Información del producto
+            // Información del producto con animaciones
             Expanded(
               child: Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nombre del producto
-                    Text(
-                      item['name'],
-                      style: TextStyle(
-                        fontSize: 24,
-                        fontWeight: FontWeight.bold,
-                        color: colorPrimario,
-                      ),
+                    // Nombre del producto con animación
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 600),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.translate(
+                          offset: Offset(0, 30 * (1 - value)),
+                          child: Opacity(
+                            opacity: value,
+                            child: Text(
+                              item['name'],
+                              style: TextStyle(
+                                fontSize: 24,
+                                fontWeight: FontWeight.bold,
+                                color: colorPrimario,
+                              ),
+                            ),
+                          ),
+                        );
+                      },
                     ),
                     const SizedBox(height: 8),
 
@@ -794,25 +957,38 @@ class _ClienteScreenState extends State<ClienteScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // Precio
-                    Row(
-                      children: [
-                        Text(
-                          'Precio: ',
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: Colors.grey[700],
+                    // Precio con animación pulsante
+                    TweenAnimationBuilder<double>(
+                      duration: const Duration(milliseconds: 800),
+                      tween: Tween(begin: 0.0, end: 1.0),
+                      builder: (context, value, child) {
+                        return Transform.scale(
+                          scale: 0.8 + (0.2 * value),
+                          child: Opacity(
+                            opacity: value,
+                            child: Row(
+                              children: [
+                                Text(
+                                  'Precio: ',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    color: Colors.grey[700],
+                                  ),
+                                ),
+                                AnimatedDefaultTextStyle(
+                                  duration: const Duration(milliseconds: 300),
+                                  style: TextStyle(
+                                    fontSize: 24,
+                                    fontWeight: FontWeight.bold,
+                                    color: colorNaranja,
+                                  ),
+                                  child: Text('\$${item['price'].toStringAsFixed(2)}'),
+                                ),
+                              ],
+                            ),
                           ),
-                        ),
-                        Text(
-                          '\$${item['price'].toStringAsFixed(2)}',
-                          style: TextStyle(
-                            fontSize: 24,
-                            fontWeight: FontWeight.bold,
-                            color: colorNaranja,
-                          ),
-                        ),
-                      ],
+                        );
+                      },
                     ),
 
                     const Spacer(),
@@ -1196,8 +1372,13 @@ class _ClienteScreenState extends State<ClienteScreen> {
     );
   }
 
-  // ✅ FUNCIONES AUXILIARES
+  // ✅ FUNCIONES AUXILIARES con animaciones
   void _addToCart(Map<String, dynamic> item) {
+    // ✅ Animación de rebote al agregar al carrito
+    _scaleController.reverse().then((_) {
+      _scaleController.forward();
+    });
+
     setState(() {
       final existingIndex = _cartItems.indexWhere(
         (cartItem) => cartItem['id'] == item['id'],
@@ -1214,6 +1395,9 @@ class _ClienteScreenState extends State<ClienteScreen> {
         (sum, item) => sum + (item['quantity'] as int),
       );
     });
+
+    // ✅ Feedback háptico (vibración)
+    // HapticFeedback.lightImpact();
   }
 
   void _increaseQuantity(int index) {
