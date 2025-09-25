@@ -56,7 +56,7 @@ class _LoginScreenState extends State<LoginScreen> {
   void _redirectByRole(int userRole, String userName) {
     String routeDestination;
     String descripcion;
-    
+
     switch (userRole) {
       case 1:
         routeDestination = '/admin';
@@ -104,10 +104,10 @@ class _LoginScreenState extends State<LoginScreen> {
       // ✅ PETICIÓN HTTP: Enviamos email y password a la API
       final response = await http.post(
         Uri.parse(
-          //'http://localhost/APP_1601/flutter_application_1/php/api.php' //Ruta Diany Enamorado
+          'http://localhost/APP_1601/flutter_application_1/php/api.php', //Ruta Diany Enamorado
           //'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php' //Ruta Angel Perez
           //'http://localhost/Proyecto_APP/Proyecto_APP/flutter_application_1/php/api.php', //Ruta Jhair Rios
-          'http://localhost/Proyecto/APP_1601/flutter_application_1/php/api.php' //Ruta Derick Dair
+          //'http://localhost/Proyecto/APP_1601/flutter_application_1/php/api.php' //Ruta Derick Dair
         ),
         body: {
           'email': _emailController.text.trim(),
@@ -153,7 +153,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
     try {
       final result = await AuthService.signInWithGoogle();
-      
+
       if (result['success']) {
         // Login exitoso
         final userRole = result['user']['role_id'];
@@ -449,11 +449,13 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // ✅ NUEVO: Separador "O"
               Row(
                 children: [
-                  Expanded(child: Divider(color: colorPrimario.withOpacity(0.3))),
+                  Expanded(
+                    child: Divider(color: colorPrimario.withOpacity(0.3)),
+                  ),
                   Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     child: Text(
@@ -464,11 +466,13 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                     ),
                   ),
-                  Expanded(child: Divider(color: colorPrimario.withOpacity(0.3))),
+                  Expanded(
+                    child: Divider(color: colorPrimario.withOpacity(0.3)),
+                  ),
                 ],
               ),
               const SizedBox(height: 16),
-              
+
               // ✅ NUEVO: Botón de Google Sign-In
               SizedBox(
                 height: 50,
@@ -485,24 +489,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       ? const SizedBox(
                           width: 20,
                           height: 20,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                          ),
+                          child: CircularProgressIndicator(strokeWidth: 2),
                         )
                       : Icon(Icons.login, size: 20),
                   label: Text(
-                    _isGoogleLoading 
-                        ? 'Conectando...' 
-                        : 'Continuar con Google',
-                    style: TextStyle(
-                      fontSize: 16, 
-                      fontWeight: FontWeight.w600,
-                    ),
+                    _isGoogleLoading ? 'Conectando...' : 'Continuar con Google',
+                    style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // ✅ NUEVO: Enlace a registro
               TextButton(
                 onPressed: () {
@@ -528,7 +525,7 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 16),
-              
+
               // Pie de página opcional
               Text(
                 '© 2025 Pedidos1601',
