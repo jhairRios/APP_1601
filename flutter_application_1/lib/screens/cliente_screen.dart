@@ -92,47 +92,36 @@ class _ClienteScreenState extends State<ClienteScreen>
   @override
   void initState() {
     super.initState();
-    
+
     // ✅ Inicializar controllers de animación
     _fadeController = AnimationController(
       duration: const Duration(milliseconds: 800),
       vsync: this,
     );
-    
+
     _scaleController = AnimationController(
       duration: const Duration(milliseconds: 300),
       vsync: this,
     );
-    
+
     _slideController = AnimationController(
       duration: const Duration(milliseconds: 600),
       vsync: this,
     );
 
     // ✅ Crear animaciones
-    _fadeAnimation = Tween<double>(
-      begin: 0.0,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _fadeController,
-      curve: Curves.easeInOut,
-    ));
+    _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
+      CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
+    );
 
-    _scaleAnimation = Tween<double>(
-      begin: 0.8,
-      end: 1.0,
-    ).animate(CurvedAnimation(
-      parent: _scaleController,
-      curve: Curves.elasticOut,
-    ));
+    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
+      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
+    );
 
-    _slideAnimation = Tween<Offset>(
-      begin: const Offset(0, 0.5),
-      end: Offset.zero,
-    ).animate(CurvedAnimation(
-      parent: _slideController,
-      curve: Curves.easeOutCubic,
-    ));
+    _slideAnimation =
+        Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
+          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
+        );
 
     // ✅ Iniciar animaciones
     _fadeController.forward();
@@ -266,13 +255,13 @@ class _ClienteScreenState extends State<ClienteScreen>
           return FadeTransition(
             opacity: animation,
             child: SlideTransition(
-              position: Tween<Offset>(
-                begin: const Offset(0.1, 0),
-                end: Offset.zero,
-              ).animate(CurvedAnimation(
-                parent: animation,
-                curve: Curves.easeInOut,
-              )),
+              position:
+                  Tween<Offset>(
+                    begin: const Offset(0.1, 0),
+                    end: Offset.zero,
+                  ).animate(
+                    CurvedAnimation(parent: animation, curve: Curves.easeInOut),
+                  ),
               child: child,
             ),
           );
@@ -492,17 +481,20 @@ class _ClienteScreenState extends State<ClienteScreen>
                   return FadeTransition(
                     opacity: _fadeAnimation,
                     child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: Offset(0, 0.3 + (index * 0.1)),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(
-                        parent: _slideController,
-                        curve: Interval(
-                          (index * 0.1).clamp(0.0, 1.0),
-                          1.0,
-                          curve: Curves.easeOutCubic,
-                        ),
-                      )),
+                      position:
+                          Tween<Offset>(
+                            begin: Offset(0, 0.3 + (index * 0.1)),
+                            end: Offset.zero,
+                          ).animate(
+                            CurvedAnimation(
+                              parent: _slideController,
+                              curve: Interval(
+                                (index * 0.1).clamp(0.0, 1.0),
+                                1.0,
+                                curve: Curves.easeOutCubic,
+                              ),
+                            ),
+                          ),
                       child: _buildMenuItemCard(
                         item,
                         colorPrimario,
@@ -982,7 +974,9 @@ class _ClienteScreenState extends State<ClienteScreen>
                                     fontWeight: FontWeight.bold,
                                     color: colorNaranja,
                                   ),
-                                  child: Text('\$${item['price'].toStringAsFixed(2)}'),
+                                  child: Text(
+                                    '\$${item['price'].toStringAsFixed(2)}',
+                                  ),
                                 ),
                               ],
                             ),
