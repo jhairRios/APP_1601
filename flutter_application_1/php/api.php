@@ -1,8 +1,14 @@
 <?php
 header('Content-Type: application/json');
 header('Access-Control-Allow-Origin: *');
-header('Access-Control-Allow-Methods: POST');
-header('Access-Control-Allow-Headers: Content-Type');
+header('Access-Control-Allow-Methods: GET, POST, OPTIONS');
+header('Access-Control-Allow-Headers: Content-Type, Authorization');
+
+// Manejar peticiones OPTIONS (preflight)
+if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
+    http_response_code(200);
+    exit();
+}
 
 // Configuración de la base de datos
 $host = 'localhost';
@@ -15,76 +21,335 @@ try {
     $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
-    // Solo procesar peticiones POST
-    if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+    // Solo procesar peticiones POST y GET
+    if ($_SERVER['REQUEST_METHOD'] == 'POST' || $_SERVER['REQUEST_METHOD'] == 'GET') {
         
-        // Obtener acción del POST (para manejar diferentes tipos de login)
-        $action = $_POST['action'] ?? 'login';
+        // Leer datos JSON si se envían como JSON
+        $input_data = [];
+        if ($_SERVER['REQUEST_METHOD'] == 'POST') {
+            $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
+            if (strpos($content_type, 'application/json') !== false) {
+                $json_data = json_decode(file_get_contents('php://input'), true);
+                if ($json_data) {
+                    $input_data = $json_data;
+                }
+            } else {
+                $input_data = $_POST;
+            }
+        } else {
+            $input_data = $_GET;
+        }
         
-        // ========== NUEVA FUNCIONALIDAD: GOOGLE LOGIN ==========
-        if ($action === 'google_login') {
-            // Obtener datos del Google Sign-In
-            $email = $_POST['email'] ?? '';
-            $name = $_POST['name'] ?? '';
+        // Obtener acción del POST, GET o JSON
+        $action = $input_data['action'] ?? $_POST['action'] ?? $_GET['action'] ?? 'login';
+        
+        // ========== OBTENER ROLES DE LA TABLA ROL ==========
+        if ($action === 'get_roles') {
+            try {
+                $stmt = $pdo->prepare("SELECT Id_Rol, Descripcion FROM rol ORDER BY Descripcion");
+                $stmt->execute();
+                $roles = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                echo json_encode([
+                    'success' => true,
+                    'roles' => $roles
+                ]);
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error obteniendo roles: ' . $e->getMessage()
+                ]);
+                exit;
+            }
+        }
+        
+        // ========== CREAR NUEVO USUARIO ==========
+        if ($action === 'create_user') {
+            $nombre = $input_data['nombre'] ?? '';
+            $correo = $input_data['correo'] ?? '';
+            $telefono = $input_data['telefono'] ?? '';
+            $contrasena = $input_data['contrasena'] ?? '';
+            $id_rol = $input_data['id_rol'] ?? '';
             
-            // Validar que no estén vacíos
-            if (empty($email) || empty($name)) {
-                echo json_encode(['success' => false, 'message' => 'Email y nombre requeridos para Google Login']);
+            // Validar campos requeridos
+            if (empty($nombre) || empty($correo) || empty($contrasena) || empty($id_rol)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Todos los campos son requeridos excepto teléfono'
+                ]);
                 exit;
             }
             
-            // Verificar si el usuario ya existe
-            $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE Correo = ?");
-            $stmt->execute([$email]);
-            $existingUser = $stmt->fetch();
-            
-            if ($existingUser) {
-                // Usuario ya existe, responder éxito
+            // Verificar que el correo no esté ya registrado
+            $stmt = $pdo->prepare("SELECT Id_Usuario FROM usuarios WHERE Correo = ?");
+            $stmt->execute([$correo]);
+            if ($stmt->fetch()) {
                 echo json_encode([
-                    'success' => true, 
-                    'message' => 'Usuario ya registrado, login exitoso',
-                    'user' => [
-                        'id' => $existingUser['Id_Usuario'],
-                        'name' => $existingUser['Nombre'],
-                        'email' => $existingUser['Correo'],
-                        'role_id' => $existingUser['Id_Rol']
-                    ]
+                    'success' => false,
+                    'message' => 'El correo ya está registrado'
                 ]);
-            } else {
-                // Usuario no existe, crear nuevo usuario
-                try {
-                    // Para usuarios de Google, usamos una contraseña especial
-                    $googlePassword = 'GOOGLE_USER_' . md5($email);
-                    $stmt = $pdo->prepare("INSERT INTO usuarios (Nombre, Correo, Contrasena, activo, Id_Rol) VALUES (?, ?, ?, 1, 2)");
-                    $stmt->execute([$name, $email, $googlePassword]);
-                    
-                    // Obtener el ID del usuario recién creado
-                    $newUserId = $pdo->lastInsertId();
-                    
-                    echo json_encode([
-                        'success' => true, 
-                        'message' => 'Usuario registrado y login exitoso',
-                        'user' => [
-                            'id' => $newUserId,
-                            'name' => $name,
-                            'email' => $email,
-                            'role_id' => 2
-                        ]
-                    ]);
-                } catch (PDOException $e) {
-                    echo json_encode(['success' => false, 'message' => 'Error al registrar usuario: ' . $e->getMessage()]);
-                }
+                exit;
             }
-            exit;
+            
+            try {
+                // Insertar nuevo usuario
+                $stmt = $pdo->prepare("INSERT INTO usuarios (Nombre, Correo, Telefono, Contrasena, Fecha_Registro, Id_Rol, activo) VALUES (?, ?, ?, ?, NOW(), ?, 1)");
+                $success = $stmt->execute([
+                    $nombre,
+                    $correo,
+                    $telefono,
+                    md5($contrasena), // Usando MD5 como en el login
+                    $id_rol
+                ]);
+                
+                if ($success) {
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'Usuario creado exitosamente',
+                        'user_id' => $pdo->lastInsertId()
+                    ]);
+                } else {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Error al crear el usuario'
+                    ]);
+                }
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error creando usuario: ' . $e->getMessage()
+                ]);
+                exit;
+            }
         }
-        // ========== FIN NUEVA FUNCIONALIDAD ==========
+        
+        // ========== OBTENER USUARIOS ==========
+        if ($action === 'get_users') {
+            try {
+                $stmt = $pdo->prepare("
+                    SELECT u.Id_Usuario, u.Nombre, u.Correo, u.Telefono, u.Fecha_Registro, 
+                           u.Id_Rol, u.activo, r.Descripcion
+                    FROM usuarios u 
+                    LEFT JOIN rol r ON u.Id_Rol = r.Id_Rol 
+                    ORDER BY u.Fecha_Registro DESC
+                ");
+                $stmt->execute();
+                $users = $stmt->fetchAll(PDO::FETCH_ASSOC);
+                
+                echo json_encode([
+                    'success' => true,
+                    'users' => $users
+                ]);
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error obteniendo usuarios: ' . $e->getMessage()
+                ]);
+                exit;
+            }
+        }
+        
+        // ========== ELIMINAR USUARIO ==========
+        if ($action === 'delete_user') {
+            $id_usuario = $input_data['id_usuario'] ?? '';
+            
+            if (empty($id_usuario)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'ID de usuario requerido'
+                ]);
+                exit;
+            }
+            
+            try {
+                // Soft delete - marcar como inactivo
+                $stmt = $pdo->prepare("UPDATE usuarios SET activo = 0 WHERE Id_Usuario = ?");
+                $success = $stmt->execute([$id_usuario]);
+                
+                if ($success && $stmt->rowCount() > 0) {
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'Usuario desactivado exitosamente'
+                    ]);
+                } else {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Usuario no encontrado'
+                    ]);
+                }
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error eliminando usuario: ' . $e->getMessage()
+                ]);
+                exit;
+            }
+        }
+
+        // ========== ACTUALIZAR USUARIO ==========
+        if ($action === 'update_user') {
+            $id_usuario = $input_data['id_usuario'] ?? '';
+            $nombre = $input_data['nombre'] ?? '';
+            $correo = $input_data['correo'] ?? '';
+            $telefono = $input_data['telefono'] ?? '';
+            $password = $input_data['password'] ?? '';
+            $id_rol = $input_data['id_rol'] ?? '';
+            $activo = $input_data['activo'] ?? 1;
+            
+            if (empty($id_usuario) || empty($nombre) || empty($correo) || empty($id_rol)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Todos los campos son requeridos excepto teléfono y contraseña'
+                ]);
+                exit;
+            }
+            
+            // Verificar que el correo no esté ya registrado por otro usuario
+            $stmt = $pdo->prepare("SELECT Id_Usuario FROM usuarios WHERE Correo = ? AND Id_Usuario != ?");
+            $stmt->execute([$correo, $id_usuario]);
+            if ($stmt->fetch()) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'El correo ya está registrado por otro usuario'
+                ]);
+                exit;
+            }
+            
+            try {
+                // Actualizar usuario (con o sin contraseña)
+                if (!empty($password)) {
+                    // Actualizar con nueva contraseña
+                    $stmt = $pdo->prepare("UPDATE usuarios SET Nombre = ?, Correo = ?, Telefono = ?, Contrasena = ?, Id_Rol = ?, activo = ? WHERE Id_Usuario = ?");
+                    $success = $stmt->execute([
+                        $nombre,
+                        $correo,
+                        $telefono,
+                        md5($password),
+                        $id_rol,
+                        $activo,
+                        $id_usuario
+                    ]);
+                } else {
+                    // Actualizar sin cambiar contraseña
+                    $stmt = $pdo->prepare("UPDATE usuarios SET Nombre = ?, Correo = ?, Telefono = ?, Id_Rol = ?, activo = ? WHERE Id_Usuario = ?");
+                    $success = $stmt->execute([
+                        $nombre,
+                        $correo,
+                        $telefono,
+                        $id_rol,
+                        $activo,
+                        $id_usuario
+                    ]);
+                }
+                
+                if ($success && $stmt->rowCount() > 0) {
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'Usuario actualizado exitosamente'
+                    ]);
+                } else {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'No se realizaron cambios o usuario no encontrado'
+                    ]);
+                }
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error actualizando usuario: ' . $e->getMessage()
+                ]);
+                exit;
+            }
+        }
+
+        // ========== CAMBIAR ESTADO USUARIO ==========
+        if ($action === 'toggle_user_status') {
+            $id_usuario = $input_data['id_usuario'] ?? '';
+            $activo = $input_data['activo'] ?? '';
+            
+            if (empty($id_usuario) || $activo === '') {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'ID de usuario y estado requeridos'
+                ]);
+                exit;
+            }
+            
+            try {
+                $stmt = $pdo->prepare("UPDATE usuarios SET activo = ? WHERE Id_Usuario = ?");
+                $success = $stmt->execute([$activo, $id_usuario]);
+                
+                if ($success && $stmt->rowCount() > 0) {
+                    $mensaje = $activo == 1 ? 'Usuario activado exitosamente' : 'Usuario desactivado exitosamente';
+                    echo json_encode([
+                        'success' => true,
+                        'message' => $mensaje
+                    ]);
+                } else {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Usuario no encontrado'
+                    ]);
+                }
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error cambiando estado: ' . $e->getMessage()
+                ]);
+                exit;
+            }
+        }
+
+        // ========== ELIMINAR USUARIO DEFINITIVAMENTE ==========
+        if ($action === 'delete_user_permanently') {
+            $id_usuario = $input_data['id_usuario'] ?? '';
+            
+            if (empty($id_usuario)) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'ID de usuario requerido'
+                ]);
+                exit;
+            }
+            
+            try {
+                // Hard delete - eliminar permanentemente
+                $stmt = $pdo->prepare("DELETE FROM usuarios WHERE Id_Usuario = ?");
+                $success = $stmt->execute([$id_usuario]);
+                
+                if ($success && $stmt->rowCount() > 0) {
+                    echo json_encode([
+                        'success' => true,
+                        'message' => 'Usuario eliminado permanentemente'
+                    ]);
+                } else {
+                    echo json_encode([
+                        'success' => false,
+                        'message' => 'Usuario no encontrado'
+                    ]);
+                }
+                exit;
+            } catch (PDOException $e) {
+                echo json_encode([
+                    'success' => false,
+                    'message' => 'Error eliminando usuario permanentemente: ' . $e->getMessage()
+                ]);
+                exit;
+            }
+        }
         
         // ========== NUEVA FUNCIONALIDAD: REGISTRO DE USUARIO ==========
         if ($action === 'register') {
             // Obtener datos del formulario
-            $nombre = $_POST['nombre'] ?? '';
-            $email = $_POST['email'] ?? '';
-            $password = $_POST['password'] ?? '';
+            $nombre = $input_data['nombre'] ?? '';
+            $email = $input_data['email'] ?? '';
+            $password = $input_data['password'] ?? '';
             
             // Validar que no estén vacíos
             if (empty($nombre) || empty($email) || empty($password)) {
@@ -126,8 +391,8 @@ try {
         // ========== FIN REGISTRO ==========
         
         // Obtener datos del POST (login tradicional)
-        $email = $_POST['email'] ?? '';
-        $password = $_POST['password'] ?? '';
+        $email = $input_data['email'] ?? '';
+        $password = $input_data['password'] ?? '';
         
         // Validar que no estén vacíos
         if (empty($email) || empty($password)) {
@@ -160,7 +425,7 @@ try {
         }
         
     } else {
-        echo json_encode(['success' => false, 'message' => 'Solo se permiten peticiones POST']);
+        echo json_encode(['success' => false, 'message' => 'Solo se permiten peticiones POST y GET']);
     }
     
 } catch (PDOException $e) {
