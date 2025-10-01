@@ -102,8 +102,8 @@ class _LoginScreenState extends State<LoginScreen> {
       // ✅ PETICIÓN HTTP: Enviamos email y password a la API
       final response = await http.post(
         Uri.parse(
-          //'http://localhost/APP_1601/flutter_application_1/php/api.php', //Ruta Diany Enamorado
-          'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php' //Ruta Angel Perez
+          'http://localhost/APP_1601/flutter_application_1/php/api.php', //Ruta Diany Enamorado
+          //'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php' //Ruta Angel Perez
           //'http://localhost/Proyecto_APP/Proyecto_APP/flutter_application_1/php/api.php', //Ruta Jhair Rios
           //'http://localhost/Proyecto/APP_1601/flutter_application_1/php/api.php' //Ruta Derick Dair
         ),

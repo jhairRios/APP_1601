@@ -66,9 +66,11 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   Future<void> _cargarRoles() async {
     try {
       final response = await http.get(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php?action=get_roles'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php?action=get_roles',
+        ),
       );
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
@@ -86,9 +88,11 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   Future<void> _cargarUsuarios() async {
     try {
       final response = await http.get(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php?action=get_users'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php?action=get_users',
+        ),
       );
-      
+
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
         if (data['success'] == true) {
@@ -104,7 +108,7 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
 
   // Crear nuevo usuario
   Future<void> _crearUsuario() async {
-    if (_nombreController.text.isEmpty || 
+    if (_nombreController.text.isEmpty ||
         _correoController.text.isEmpty ||
         _telefonoController.text.isEmpty ||
         _contrasenaController.text.isEmpty ||
@@ -115,7 +119,9 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'create_user',
@@ -134,17 +140,16 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
           _limpiarFormulario();
           await _cargarUsuarios(); // Recargar la lista
         } else {
-          _mostrarMensaje(data['message'] ?? 'Error creando usuario', esError: true);
+          _mostrarMensaje(
+            data['message'] ?? 'Error creando usuario',
+            esError: true,
+          );
         }
       }
     } catch (e) {
       _mostrarMensaje('Error de conexión: $e', esError: true);
     }
   }
-
-
-
-
 
   // Limpiar formulario
   void _limpiarFormulario() {
@@ -174,7 +179,7 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
     _editNombreController.text = usuario['Nombre'] ?? '';
     _editCorreoController.text = usuario['Correo'] ?? '';
     _editTelefonoController.text = usuario['Telefono'] ?? '';
-    _editPasswordController.clear(); // Dejar vacío para no mostrar la contraseña
+    _editPasswordController.clear();
     _editRolSeleccionado = usuario['Id_Rol']?.toString();
     _editActivo = (usuario['activo'] ?? 1) == 1;
 
@@ -184,65 +189,145 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
         return StatefulBuilder(
           builder: (context, setState) {
             return AlertDialog(
-              title: const Text('Editar Usuario'),
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+              ),
+              titlePadding: EdgeInsets.zero,
+              contentPadding: const EdgeInsets.all(24),
+              title: Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: colorPrimario,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(16),
+                    topRight: Radius.circular(16),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    CircleAvatar(
+                      radius: 16,
+                      backgroundColor: Colors.white.withOpacity(0.2),
+                      child: const Icon(
+                        Icons.edit,
+                        color: Colors.white,
+                        size: 16,
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        'Editar: ${usuario['Nombre'] ?? 'Usuario'}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      onPressed: () => Navigator.of(context).pop(),
+                      icon: const Icon(
+                        Icons.close,
+                        color: Colors.white,
+                        size: 20,
+                      ),
+                      padding: EdgeInsets.zero,
+                    ),
+                  ],
+                ),
+              ),
               content: SizedBox(
-                width: 400,
+                width: 500,
                 child: SingleChildScrollView(
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Nombre
-                      TextField(
-                        controller: _editNombreController,
-                        decoration: const InputDecoration(
-                          labelText: 'Nombre completo',
-                          border: OutlineInputBorder(),
-                        ),
+                      // Campos del formulario en forma más compacta
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildCompactField(
+                              controller: _editNombreController,
+                              label: 'Nombre',
+                              icon: Icons.person_outline,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildCompactField(
+                              controller: _editCorreoController,
+                              label: 'Email',
+                              icon: Icons.email_outlined,
+                              keyboardType: TextInputType.emailAddress,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
-                      // Email
-                      TextField(
-                        controller: _editCorreoController,
-                        decoration: const InputDecoration(
-                          labelText: 'Correo electrónico',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Teléfono
-                      TextField(
-                        controller: _editTelefonoController,
-                        decoration: const InputDecoration(
-                          labelText: 'Teléfono',
-                          border: OutlineInputBorder(),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-
-                      // Contraseña (opcional)
-                      TextField(
-                        controller: _editPasswordController,
-                        obscureText: true,
-                        decoration: const InputDecoration(
-                          labelText: 'Nueva contraseña (dejar vacío para no cambiar)',
-                          border: OutlineInputBorder(),
-                        ),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: _buildCompactField(
+                              controller: _editTelefonoController,
+                              label: 'Teléfono',
+                              icon: Icons.phone_outlined,
+                              keyboardType: TextInputType.phone,
+                            ),
+                          ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: _buildCompactField(
+                              controller: _editPasswordController,
+                              label: 'Nueva contraseña',
+                              icon: Icons.lock_outline,
+                              obscureText: true,
+                              isOptional: true,
+                            ),
+                          ),
+                        ],
                       ),
                       const SizedBox(height: 16),
 
                       // Selector de Rol
                       DropdownButtonFormField<String>(
                         value: _editRolSeleccionado,
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Rol',
-                          border: OutlineInputBorder(),
+                          prefixIcon: Icon(
+                            Icons.admin_panel_settings_outlined,
+                            color: colorPrimario,
+                            size: 20,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 12,
+                          ),
                         ),
-                        items: _roles.map<DropdownMenuItem<String>>((Map<String, dynamic> rol) {
+                        items: _roles.map<DropdownMenuItem<String>>((rol) {
                           return DropdownMenuItem<String>(
                             value: rol['Id_Rol'].toString(),
-                            child: Text(rol['Descripcion'] ?? 'Sin nombre'),
+                            child: Row(
+                              children: [
+                                Container(
+                                  width: 8,
+                                  height: 8,
+                                  decoration: BoxDecoration(
+                                    color: _getColorRol(rol['Descripcion']),
+                                    borderRadius: BorderRadius.circular(4),
+                                  ),
+                                ),
+                                const SizedBox(width: 8),
+                                Text(
+                                  rol['Descripcion'] ?? 'Sin nombre',
+                                  style: const TextStyle(fontSize: 14),
+                                ),
+                              ],
+                            ),
                           );
                         }).toList(),
                         onChanged: (String? newValue) {
@@ -253,20 +338,53 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                       ),
                       const SizedBox(height: 16),
 
-                      // Estado activo/inactivo
-                      Row(
-                        children: [
-                          const Text('Estado: '),
-                          Switch(
-                            value: _editActivo,
-                            onChanged: (bool value) {
-                              setState(() {
-                                _editActivo = value;
-                              });
-                            },
-                          ),
-                          Text(_editActivo ? 'Activo' : 'Inactivo'),
-                        ],
+                      // Estado activo/inactivo más compacto
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[50],
+                          borderRadius: BorderRadius.circular(8),
+                          border: Border.all(color: Colors.grey[200]!),
+                        ),
+                        child: Row(
+                          children: [
+                            Icon(
+                              _editActivo ? Icons.account_circle : Icons.block,
+                              color: _editActivo ? Colors.green : Colors.red,
+                              size: 20,
+                            ),
+                            const SizedBox(width: 8),
+                            const Expanded(
+                              child: Text(
+                                'Estado de la cuenta',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            Text(
+                              _editActivo ? 'Activo' : 'Inactivo',
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _editActivo ? Colors.green : Colors.red,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            Switch(
+                              value: _editActivo,
+                              onChanged: (bool value) {
+                                setState(() {
+                                  _editActivo = value;
+                                });
+                              },
+                              activeColor: colorPrimario,
+                              materialTapTargetSize:
+                                  MaterialTapTargetSize.shrinkWrap,
+                            ),
+                          ],
+                        ),
                       ),
                     ],
                   ),
@@ -275,18 +393,29 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
               actions: [
                 TextButton(
                   onPressed: () => Navigator.of(context).pop(),
-                  child: const Text('Cancelar'),
+                  child: const Text(
+                    'Cancelar',
+                    style: TextStyle(color: Colors.grey),
+                  ),
                 ),
-                ElevatedButton(
+                ElevatedButton.icon(
                   onPressed: () {
                     Navigator.of(context).pop();
                     _actualizarUsuario(usuario['Id_Usuario']);
                   },
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.blue,
+                    backgroundColor: colorPrimario,
                     foregroundColor: Colors.white,
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 16,
+                      vertical: 12,
+                    ),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
-                  child: const Text('Actualizar'),
+                  icon: const Icon(Icons.save, size: 16),
+                  label: const Text('Guardar'),
                 ),
               ],
             );
@@ -296,12 +425,42 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
     );
   }
 
+  // Widget helper para campos compactos
+  Widget _buildCompactField({
+    required TextEditingController controller,
+    required String label,
+    required IconData icon,
+    TextInputType? keyboardType,
+    bool obscureText = false,
+    bool isOptional = false,
+  }) {
+    return TextField(
+      controller: controller,
+      keyboardType: keyboardType,
+      obscureText: obscureText,
+      style: const TextStyle(fontSize: 14),
+      decoration: InputDecoration(
+        labelText: isOptional ? '$label (Opcional)' : label,
+        labelStyle: TextStyle(fontSize: 12, color: Colors.grey[600]),
+        prefixIcon: Icon(icon, color: colorPrimario, size: 18),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+        contentPadding: const EdgeInsets.symmetric(
+          horizontal: 12,
+          vertical: 12,
+        ),
+      ),
+    );
+  }
+
   // Actualizar usuario
   Future<void> _actualizarUsuario(int idUsuario) async {
-    if (_editNombreController.text.isEmpty || 
+    if (_editNombreController.text.isEmpty ||
         _editCorreoController.text.isEmpty ||
         _editRolSeleccionado == null) {
-      _mostrarMensaje('Por favor completa los campos obligatorios', esError: true);
+      _mostrarMensaje(
+        'Por favor completa los campos obligatorios',
+        esError: true,
+      );
       return;
     }
 
@@ -322,7 +481,9 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
       }
 
       final response = await http.post(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestBody),
       );
@@ -333,7 +494,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
           _mostrarMensaje('Usuario actualizado exitosamente');
           await _cargarUsuarios(); // Recargar la lista
         } else {
-          _mostrarMensaje(data['message'] ?? 'Error actualizando usuario', esError: true);
+          _mostrarMensaje(
+            data['message'] ?? 'Error actualizando usuario',
+            esError: true,
+          );
         }
       }
     } catch (e) {
@@ -344,10 +508,12 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   // Cambiar estado de usuario (activar/desactivar)
   Future<void> _cambiarEstadoUsuario(Map<String, dynamic> usuario) async {
     int nuevoEstado = usuario['activo'] == 1 ? 0 : 1;
-    
+
     try {
       final response = await http.post(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'toggle_user_status',
@@ -362,7 +528,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
           _mostrarMensaje(data['message']);
           await _cargarUsuarios(); // Recargar la lista
         } else {
-          _mostrarMensaje(data['message'] ?? 'Error cambiando estado', esError: true);
+          _mostrarMensaje(
+            data['message'] ?? 'Error cambiando estado',
+            esError: true,
+          );
         }
       }
     } catch (e) {
@@ -374,7 +543,9 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   Future<void> _eliminarUsuarioDefinitivamente(int idUsuario) async {
     try {
       final response = await http.post(
-        Uri.parse('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php'),
+        Uri.parse(
+          'http://localhost/APP_1601/flutter_application_1/php/api.php',
+        ),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'delete_user_permanently',
@@ -388,7 +559,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
           _mostrarMensaje('Usuario eliminado permanentemente');
           await _cargarUsuarios(); // Recargar la lista
         } else {
-          _mostrarMensaje(data['message'] ?? 'Error eliminando usuario', esError: true);
+          _mostrarMensaje(
+            data['message'] ?? 'Error eliminando usuario',
+            esError: true,
+          );
         }
       }
     } catch (e) {
@@ -453,14 +627,20 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                             hintStyle: TextStyle(
                               color: colorTexto.withOpacity(0.6),
                             ),
-                            prefixIcon: Icon(Icons.person, color: colorPrimario),
+                            prefixIcon: Icon(
+                              Icons.person,
+                              color: colorPrimario,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(color: colorPrimario),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colorPrimario, width: 2),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
@@ -484,7 +664,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colorPrimario, width: 2),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
@@ -508,7 +691,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colorPrimario, width: 2),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
@@ -532,7 +718,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colorPrimario, width: 2),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
                             ),
                           ),
                         ),
@@ -544,14 +733,20 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                           decoration: InputDecoration(
                             labelText: 'Rol',
                             labelStyle: TextStyle(color: colorTexto),
-                            prefixIcon: Icon(Icons.admin_panel_settings, color: colorPrimario),
+                            prefixIcon: Icon(
+                              Icons.admin_panel_settings,
+                              color: colorPrimario,
+                            ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(color: colorPrimario),
                             ),
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
-                              borderSide: BorderSide(color: colorPrimario, width: 2),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
                             ),
                           ),
                           items: _roles.map((rol) {
@@ -575,7 +770,10 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                           height: 50,
                           child: ElevatedButton.icon(
                             onPressed: _crearUsuario,
-                            icon: const Icon(Icons.person_add, color: Colors.white),
+                            icon: const Icon(
+                              Icons.person_add,
+                              color: Colors.white,
+                            ),
                             label: const Text(
                               'Crear Usuario',
                               style: TextStyle(
@@ -672,15 +870,18 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                   child: Padding(
                                     padding: const EdgeInsets.all(20.0),
                                     child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
                                       children: [
                                         // Header con nombre y rol
                                         Row(
-                                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                          mainAxisAlignment:
+                                              MainAxisAlignment.spaceBetween,
                                           children: [
                                             Expanded(
                                               child: Text(
-                                                usuario['Nombre'] ?? 'Sin nombre',
+                                                usuario['Nombre'] ??
+                                                    'Sin nombre',
                                                 style: TextStyle(
                                                   fontSize: 18,
                                                   fontWeight: FontWeight.bold,
@@ -689,16 +890,21 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                               ),
                                             ),
                                             Container(
-                                              padding: const EdgeInsets.symmetric(
-                                                horizontal: 12,
-                                                vertical: 6,
-                                              ),
+                                              padding:
+                                                  const EdgeInsets.symmetric(
+                                                    horizontal: 12,
+                                                    vertical: 6,
+                                                  ),
                                               decoration: BoxDecoration(
-                                                color: _getColorRol(usuario['Descripcion']),
-                                                borderRadius: BorderRadius.circular(20),
+                                                color: _getColorRol(
+                                                  usuario['Descripcion'],
+                                                ),
+                                                borderRadius:
+                                                    BorderRadius.circular(20),
                                               ),
                                               child: Text(
-                                                usuario['Descripcion'] ?? 'Sin rol',
+                                                usuario['Descripcion'] ??
+                                                    'Sin rol',
                                                 style: const TextStyle(
                                                   color: Colors.white,
                                                   fontSize: 12,
@@ -721,10 +927,13 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                             const SizedBox(width: 8),
                                             Expanded(
                                               child: Text(
-                                                usuario['Correo'] ?? 'Sin email',
+                                                usuario['Correo'] ??
+                                                    'Sin email',
                                                 style: TextStyle(
                                                   fontSize: 14,
-                                                  color: colorTexto.withOpacity(0.8),
+                                                  color: colorTexto.withOpacity(
+                                                    0.8,
+                                                  ),
                                                 ),
                                               ),
                                             ),
@@ -741,10 +950,13 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              usuario['Telefono'] ?? 'Sin teléfono',
+                                              usuario['Telefono'] ??
+                                                  'Sin teléfono',
                                               style: TextStyle(
                                                 fontSize: 14,
-                                                color: colorTexto.withOpacity(0.8),
+                                                color: colorTexto.withOpacity(
+                                                  0.8,
+                                                ),
                                               ),
                                             ),
                                           ],
@@ -763,7 +975,9 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                               'Registrado: ${usuario['Fecha_Registro'] ?? 'Fecha desconocida'}',
                                               style: TextStyle(
                                                 fontSize: 14,
-                                                color: colorTexto.withOpacity(0.6),
+                                                color: colorTexto.withOpacity(
+                                                  0.6,
+                                                ),
                                               ),
                                             ),
                                           ],
@@ -774,16 +988,24 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                         Row(
                                           children: [
                                             Icon(
-                                              usuario['activo'] == 1 ? Icons.check_circle : Icons.cancel,
+                                              usuario['activo'] == 1
+                                                  ? Icons.check_circle
+                                                  : Icons.cancel,
                                               size: 16,
-                                              color: usuario['activo'] == 1 ? Colors.green : Colors.red,
+                                              color: usuario['activo'] == 1
+                                                  ? Colors.green
+                                                  : Colors.red,
                                             ),
                                             const SizedBox(width: 8),
                                             Text(
-                                              usuario['activo'] == 1 ? 'Activo' : 'Inactivo',
+                                              usuario['activo'] == 1
+                                                  ? 'Activo'
+                                                  : 'Inactivo',
                                               style: TextStyle(
                                                 fontSize: 14,
-                                                color: usuario['activo'] == 1 ? Colors.green : Colors.red,
+                                                color: usuario['activo'] == 1
+                                                    ? Colors.green
+                                                    : Colors.red,
                                                 fontWeight: FontWeight.bold,
                                               ),
                                             ),
@@ -808,49 +1030,73 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                               ),
                                               label: Text(
                                                 'Editar',
-                                                style: TextStyle(color: colorPrimario),
-                                              ),
-                                              style: OutlinedButton.styleFrom(
-                                                side: BorderSide(color: colorPrimario),
-                                                shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(8),
-                                                ),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 8,
-                                                ),
-                                              ),
-                                            ),
-                                            // Botón Activar/Desactivar
-                                            OutlinedButton.icon(
-                                              onPressed: () => _cambiarEstadoUsuario(usuario),
-                                              icon: Icon(
-                                                usuario['activo'] == 1 ? Icons.visibility_off : Icons.visibility,
-                                                size: 16,
-                                                color: usuario['activo'] == 1 ? Colors.orange : Colors.green,
-                                              ),
-                                              label: Text(
-                                                usuario['activo'] == 1 ? 'Desactivar' : 'Activar',
                                                 style: TextStyle(
-                                                  color: usuario['activo'] == 1 ? Colors.orange : Colors.green,
+                                                  color: colorPrimario,
                                                 ),
                                               ),
                                               style: OutlinedButton.styleFrom(
                                                 side: BorderSide(
-                                                  color: usuario['activo'] == 1 ? Colors.orange : Colors.green,
+                                                  color: colorPrimario,
                                                 ),
                                                 shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
                                                 ),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 8,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
+                                              ),
+                                            ),
+                                            // Botón Activar/Desactivar
+                                            OutlinedButton.icon(
+                                              onPressed: () =>
+                                                  _cambiarEstadoUsuario(
+                                                    usuario,
+                                                  ),
+                                              icon: Icon(
+                                                usuario['activo'] == 1
+                                                    ? Icons.visibility_off
+                                                    : Icons.visibility,
+                                                size: 16,
+                                                color: usuario['activo'] == 1
+                                                    ? Colors.orange
+                                                    : Colors.green,
+                                              ),
+                                              label: Text(
+                                                usuario['activo'] == 1
+                                                    ? 'Desactivar'
+                                                    : 'Activar',
+                                                style: TextStyle(
+                                                  color: usuario['activo'] == 1
+                                                      ? Colors.orange
+                                                      : Colors.green,
                                                 ),
+                                              ),
+                                              style: OutlinedButton.styleFrom(
+                                                side: BorderSide(
+                                                  color: usuario['activo'] == 1
+                                                      ? Colors.orange
+                                                      : Colors.green,
+                                                ),
+                                                shape: RoundedRectangleBorder(
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
+                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
                                               ),
                                             ),
                                             // Botón Eliminar Definitivamente
                                             OutlinedButton.icon(
-                                              onPressed: () => _eliminarUsuarioDefinitivamente(usuario['Id_Usuario']),
+                                              onPressed: () =>
+                                                  _eliminarUsuarioDefinitivamente(
+                                                    usuario['Id_Usuario'],
+                                                  ),
                                               icon: const Icon(
                                                 Icons.delete_forever,
                                                 size: 16,
@@ -858,17 +1104,23 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
                                               ),
                                               label: const Text(
                                                 'Eliminar',
-                                                style: TextStyle(color: Colors.red),
+                                                style: TextStyle(
+                                                  color: Colors.red,
+                                                ),
                                               ),
                                               style: OutlinedButton.styleFrom(
-                                                side: const BorderSide(color: Colors.red),
+                                                side: const BorderSide(
+                                                  color: Colors.red,
+                                                ),
                                                 shape: RoundedRectangleBorder(
-                                                  borderRadius: BorderRadius.circular(8),
+                                                  borderRadius:
+                                                      BorderRadius.circular(8),
                                                 ),
-                                                padding: const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                  vertical: 8,
-                                                ),
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 12,
+                                                      vertical: 8,
+                                                    ),
                                               ),
                                             ),
                                           ],
