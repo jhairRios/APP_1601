@@ -369,7 +369,7 @@ try {
             // Crear nuevo usuario
             try {
                 $stmt = $pdo->prepare("INSERT INTO usuarios (Nombre, Correo, Contrasena, activo, Id_Rol) VALUES (?, ?, ?, 1, 2)");
-                $stmt->execute([$nombre, $email, $password]);
+                $stmt->execute([$nombre, $email, md5($password)]);
                 
                 $newUserId = $pdo->lastInsertId();
                 
@@ -401,9 +401,9 @@ try {
         }
         
         // Buscar usuario en la base de datos
-        // ✅ ADAPTADO: Usar los nombres de campos de tu tabla usuarios
+        // ✅ CORREGIDO: Usar MD5 para hashear la contraseña antes de comparar
         $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE Correo = ? AND Contrasena = ? AND activo = 1");
-        $stmt->execute([$email, $password]);
+        $stmt->execute([$email, md5($password)]);
         $user = $stmt->fetch();
         
         if ($user) {
