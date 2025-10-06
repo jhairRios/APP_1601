@@ -390,6 +390,53 @@ try {
         }
         // ========== FIN REGISTRO ==========
         
+        // ========== RECUPERAR CONTRASEÑA ==========
+        if ($action === 'recover_password') {
+            $email = $input_data['email'] ?? '';
+            
+            if (empty($email)) {
+                echo json_encode(['success' => false, 'message' => 'Correo electrónico requerido']);
+                exit;
+            }
+            
+            try {
+                // Verificar si el correo existe en la base de datos y está activo
+                $stmt = $pdo->prepare("SELECT Id_Usuario, Nombre FROM usuarios WHERE Correo = ? AND activo = 1");
+                $stmt->execute([$email]);
+                $user = $stmt->fetch();
+                
+                if (!$user) {
+                    echo json_encode(['success' => false, 'message' => 'No se encontró una cuenta activa con este correo electrónico']);
+                    exit;
+                }
+                
+                // Generar nueva contraseña temporal (8 caracteres alfanuméricos)
+                $newPassword = substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 8);
+                $hashedPassword = md5($newPassword);
+                
+                // Actualizar la contraseña en la base de datos
+                $updateStmt = $pdo->prepare("UPDATE usuarios SET Contrasena = ? WHERE Id_Usuario = ?");
+                $success = $updateStmt->execute([$hashedPassword, $user['Id_Usuario']]);
+                
+                if ($success) {
+                    echo json_encode([
+                        'success' => true, 
+                        'message' => "Nueva contraseña temporal generada para {$user['Nombre']}: $newPassword",
+                        'new_password' => $newPassword,
+                        'usuario' => $user['Nombre']
+                    ]);
+                } else {
+                    echo json_encode(['success' => false, 'message' => 'Error al actualizar la contraseña']);
+                }
+                exit;
+                
+            } catch (PDOException $e) {
+                echo json_encode(['success' => false, 'message' => 'Error procesando solicitud: ' . $e->getMessage()]);
+                exit;
+            }
+        }
+        // ========== FIN RECUPERAR CONTRASEÑA ==========
+        
         // Obtener datos del POST (login tradicional)
         $email = $input_data['email'] ?? '';
         $password = $input_data['password'] ?? '';

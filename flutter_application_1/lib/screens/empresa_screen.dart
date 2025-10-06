@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
@@ -12,6 +14,83 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
   final Color colorTexto = const Color.fromARGB(255, 0, 0, 0);
   final Color colorFondo = const Color.fromARGB(255, 255, 255, 255);
   final Color colorPrimario = const Color.fromRGBO(0, 20, 34, 1);
+
+  // Variables para el logo
+  Uint8List? _logoBytes;
+  final ImagePicker _picker = ImagePicker();
+
+  // Función para seleccionar imagen
+  Future<void> _seleccionarLogo() async {
+    try {
+      showModalBottomSheet(
+        context: context,
+        builder: (BuildContext context) {
+          return SafeArea(
+            child: Wrap(
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text('Galería'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final XFile? image = await _picker.pickImage(
+                      source: ImageSource.gallery,
+                      maxWidth: 1000,
+                      maxHeight: 1000,
+                      imageQuality: 85,
+                    );
+                    if (image != null) {
+                      final bytes = await image.readAsBytes();
+                      setState(() {
+                        _logoBytes = bytes;
+                      });
+                    }
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.photo_camera),
+                  title: const Text('Cámara'),
+                  onTap: () async {
+                    Navigator.pop(context);
+                    final XFile? image = await _picker.pickImage(
+                      source: ImageSource.camera,
+                      maxWidth: 1000,
+                      maxHeight: 1000,
+                      imageQuality: 85,
+                    );
+                    if (image != null) {
+                      final bytes = await image.readAsBytes();
+                      setState(() {
+                        _logoBytes = bytes;
+                      });
+                    }
+                  },
+                ),
+                if (_logoBytes != null)
+                  ListTile(
+                    leading: const Icon(Icons.delete),
+                    title: const Text('Eliminar logo'),
+                    onTap: () {
+                      Navigator.pop(context);
+                      setState(() {
+                        _logoBytes = null;
+                      });
+                    },
+                  ),
+              ],
+            ),
+          );
+        },
+      );
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Error al seleccionar imagen: $e'),
+          backgroundColor: Colors.red,
+        ),
+      );
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -196,10 +275,36 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                     padding: const EdgeInsets.all(20.0),
                     child: Column(
                       children: [
-                        Icon(Icons.image, size: 48, color: colorPrimario),
-                        const SizedBox(height: 12),
+                        // Mostrar logo seleccionado o ícono placeholder
+                        Container(
+                          height: 120,
+                          width: 120,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: colorPrimario.withOpacity(0.3),
+                              width: 2,
+                            ),
+                          ),
+                          child: _logoBytes != null
+                              ? ClipRRect(
+                                  borderRadius: BorderRadius.circular(10),
+                                  child: Image.memory(
+                                    _logoBytes!,
+                                    fit: BoxFit.cover,
+                                  ),
+                                )
+                              : Icon(
+                                  Icons.image,
+                                  size: 48,
+                                  color: colorPrimario.withOpacity(0.6),
+                                ),
+                        ),
+                        const SizedBox(height: 16),
                         Text(
-                          'Logo de la Empresa',
+                          _logoBytes != null
+                              ? 'Logo Seleccionado'
+                              : 'Logo de la Empresa',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -208,7 +313,9 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Selecciona un logo para tu empresa',
+                          _logoBytes != null
+                              ? 'Toca el botón para cambiar el logo'
+                              : 'Selecciona un logo para tu empresa',
                           style: TextStyle(
                             fontSize: 14,
                             color: colorTexto.withOpacity(0.7),
@@ -217,9 +324,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                         ),
                         const SizedBox(height: 16),
                         OutlinedButton(
-                          onPressed: () {
-                            // TODO: Implementar selección de imagen
-                          },
+                          onPressed: _seleccionarLogo,
                           style: OutlinedButton.styleFrom(
                             foregroundColor: colorPrimario,
                             side: BorderSide(color: colorPrimario, width: 2),
@@ -234,9 +339,16 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                           child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(Icons.upload, color: colorPrimario),
+                              Icon(
+                                _logoBytes != null ? Icons.edit : Icons.upload,
+                                color: colorPrimario,
+                              ),
                               const SizedBox(width: 8),
-                              const Text('Seleccionar Logo'),
+                              Text(
+                                _logoBytes != null
+                                    ? 'Cambiar Logo'
+                                    : 'Seleccionar Logo',
+                              ),
                             ],
                           ),
                         ),
