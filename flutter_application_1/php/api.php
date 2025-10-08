@@ -130,7 +130,7 @@ try {
             try {
                 $stmt = $pdo->prepare("
                     SELECT u.Id_Usuario, u.Nombre, u.Correo, u.Telefono, u.Fecha_Registro, 
-                           u.Id_Rol, u.activo, r.Descripcion
+                        u.Id_Rol, u.activo, r.Descripcion
                     FROM usuarios u 
                     LEFT JOIN rol r ON u.Id_Rol = r.Id_Rol 
                     ORDER BY u.Fecha_Registro DESC
