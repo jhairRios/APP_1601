@@ -1,6 +1,7 @@
 ﻿import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import '../services/api_config.dart';
 
 class UsuarioScreen extends StatefulWidget {
   const UsuarioScreen({super.key});
@@ -65,11 +66,9 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   // Cargar roles desde BD
   Future<void> _cargarRoles() async {
     try {
-      final response = await http.get(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php?action=get_roles',
-        ),
-      );
+        final response = await http.get(
+          Uri.parse('$API_BASE_URL?action=get_roles'),
+        );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -87,11 +86,9 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   // Cargar usuarios desde BD
   Future<void> _cargarUsuarios() async {
     try {
-      final response = await http.get(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php?action=get_users',
-        ),
-      );
+        final response = await http.get(
+          Uri.parse('$API_BASE_URL?action=get_users'),
+        );
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
@@ -118,10 +115,8 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
     }
 
     try {
-      final response = await http.post(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php',
-        ),
+        final response = await http.post(
+          Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'create_user',
@@ -480,10 +475,8 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
         requestBody['password'] = _editPasswordController.text;
       }
 
-      final response = await http.post(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php',
-        ),
+        final response = await http.post(
+          Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(requestBody),
       );
@@ -511,9 +504,7 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
 
     try {
       final response = await http.post(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php',
-        ),
+          Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'toggle_user_status',
@@ -543,9 +534,7 @@ class _UsuarioScreenState extends State<UsuarioScreen> {
   Future<void> _eliminarUsuarioDefinitivamente(int idUsuario) async {
     try {
       final response = await http.post(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php',
-        ),
+          Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'delete_user_permanently',

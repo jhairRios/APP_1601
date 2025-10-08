@@ -1,10 +1,10 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'api_config.dart';
 
 class AuthService {
   // URL de tu API PHP - MISMA URL que login_screen.dart
-  static const String _baseUrl =
-      'http://localhost/APP_1601/flutter_application_1/php/api.php';
+  static const String _baseUrl = API_BASE_URL;
 
   // ✅ NUEVO: Método para registrar usuario
   static Future<Map<String, dynamic>> registerUser({

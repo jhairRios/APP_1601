@@ -1,0 +1,58 @@
+<?php
+// Respaldo de test_rds_connection.php
+// Contenido original movido a php/_backup
+$original = <<<'PHP'
+<?php
+// test_rds_connection.php
+// Prueba rápida de conexión PDO a la base de datos Amazon RDS.
+// Úsalo desde línea de comandos (php test_rds_connection.php) o accediéndolo vía web
+// IMPORTANTE: Este script contiene las credenciales tal como se usaron en el proyecto.
+// Eliminalo o muévelo a un lugar seguro después de realizar la verificación.
+
+$host = 'mi-mysql-db.c6j6ewui4d46.us-east-1.rds.amazonaws.com';
+$port = '3306';
+$dbname = 'App1601';
+$username = 'admin';
+$password = 'JhairRios_2005';
+$dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
+
+echo "Probando conexión a: {$host}:{$port} - base: {$dbname}\n";
+
+try {
+    $options = [
+        PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION,
+        PDO::ATTR_DEFAULT_FETCH_MODE => PDO::FETCH_ASSOC,
+        PDO::ATTR_TIMEOUT => 5,
+    ];
+
+    $pdo = new PDO($dsn, $username, $password, $options);
+    echo "OK: Conexión establecida usando PDO.\n";
+
+    // Consulta simple para comprobar que la base de datos responde
+    try {
+        $stmt = $pdo->query("SELECT COUNT(*) AS c FROM information_schema.tables WHERE table_schema = '" . addslashes($dbname) . "'");
+        $row = $stmt->fetch();
+        if ($row && isset($row['c'])) {
+            echo "Tablas en '{$dbname}': " . $row['c'] . "\n";
+        } else {
+            echo "No se pudo determinar el número de tablas.\n";
+        }
+    } catch (Exception $e) {
+        echo "Warning: la conexión fue exitosa pero la consulta falló: " . $e->getMessage() . "\n";
+    }
+
+} catch (PDOException $e) {
+    echo "ERROR: No se pudo conectar usando PDO. Mensaje: " . $e->getMessage() . "\n";
+
+    // Mensajes comunes y acciones sugeridas
+    echo "\nSugerencias de diagnóstico:\n";
+    echo "- Comprueba que el Security Group de RDS permite conexiones entrantes desde la IP/host donde ejecutas este script.\n";
+    echo "- Asegúrate de que el usuario/contraseña son correctos y que el usuario tiene permisos sobre la base de datos '{$dbname}'.\n";
+    echo "- Si el error dice 'could not find driver', activa la extensión pdo_mysql en php.ini y reinicia el servidor web.\n";
+    echo "- Si recibes 'Connection timed out' o 'Connection refused', revisa reglas de red/firewall y que el host/port sean accesibles.\n";
+}
+
+?>
+PHP;
+file_put_contents(__DIR__ . '/test_rds_connection.php.bak.txt', $original);
+?>

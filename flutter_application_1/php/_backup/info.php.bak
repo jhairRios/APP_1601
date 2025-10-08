@@ -1,0 +1,36 @@
+<?php
+// Respaldo de info.php
+// Archivo movido a php/_backup por limpieza. Contenido original:
+$original = <<<'PHP'
+<?php
+// info.php - ayuda a localizar la URL pública local del directorio php
+header('Content-Type: text/html; charset=utf-8');
+$dir = __DIR__;
+$files = scandir($dir);
+?>
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <title>Info - carpeta php</title>
+  <style>body{font-family:Segoe UI,Arial;margin:20px}pre{background:#f4f4f4;padding:10px}</style>
+</head>
+<body>
+  <h1>Info del directorio php</h1>
+  <p><strong>Ruta física:</strong> <code><?php echo htmlentities($dir); ?></code></p>
+  <p>Archivos encontrados en este directorio:</p>
+  <ul>
+    <?php foreach ($files as $f) { if ($f === '.' || $f === '..') continue; echo '<li>' . htmlentities($f) . '</li>'; } ?>
+  </ul>
+  <h2>Enlaces útiles</h2>
+  <ul>
+    <li><a href="api.php">Abrir api.php</a></li>
+    <li><a href="test_rds_connection.php">Ejecutar test_rds_connection.php</a></li>
+    <li><a href="test_db.php">Ejecutar test_db.php</a></li>
+  </ul>
+  <p>Si esto carga, la URL local será algo como <code>http://localhost/[ruta-relativa]/php/</code>. Copia la barra de direcciones y péga aquí la URL completa del archivo <code>info.php</code>.</p>
+</body>
+</html>
+PHP;
+file_put_contents(__DIR__ . '/info.php.bak.txt', $original);
+?>

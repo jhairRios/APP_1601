@@ -10,15 +10,17 @@ if ($_SERVER['REQUEST_METHOD'] == 'OPTIONS') {
     exit();
 }
 
-// Configuración de la base de datos
-$host = 'localhost';
-$dbname = 'app1601';
-$username = 'root';
-$password = '';
+// Configuración de la base de datos (Amazon RDS)
+$host = 'mi-mysql-db.c6j6ewui4d46.us-east-1.rds.amazonaws.com';
+$port = '3306';
+$dbname = 'App1601';
+$username = 'admin';
+$password = 'JhairRios_2005';
 
 try {
-    // Conectar a la base de datos
-    $pdo = new PDO("mysql:host=$host;dbname=$dbname", $username, $password);
+    // Conectar a la base de datos (incluye puerto y charset utf8mb4)
+    $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
+    $pdo = new PDO($dsn, $username, $password);
     $pdo->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
     
     // Solo procesar peticiones POST y GET

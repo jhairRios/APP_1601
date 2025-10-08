@@ -1,8 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart'; // ✅ Para copiar al portapapeles
 import 'package:http/http.dart'
-    as http; // ✅ Importamos http para hacer peticiones a la API
+  as http; // ✅ Importamos http para hacer peticiones a la API
 import 'dart:convert'; // ✅ Para convertir JSON
+import '../services/api_config.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -291,7 +292,7 @@ class _LoginScreenState extends State<LoginScreen> {
                                         try {
                                           final response = await http.post(
                                             Uri.parse(
-                                              'http://localhost/APP_1601/flutter_application_1/php/api.php',
+                                              API_BASE_URL,
                                             ),
                                             headers: {'Content-Type': 'application/json'},
                                             body: json.encode({
@@ -455,9 +456,7 @@ class _LoginScreenState extends State<LoginScreen> {
 
       try {
         final response = await http.post(
-          Uri.parse(
-            'http://localhost/APP_1601/flutter_application_1/php/api.php',
-          ),
+          Uri.parse(API_BASE_URL),
           headers: {'Content-Type': 'application/json'},
           body: json.encode({'action': 'recover_password', 'email': email}),
         );
@@ -698,12 +697,7 @@ class _LoginScreenState extends State<LoginScreen> {
     try {
       // ✅ PETICIÓN HTTP: Enviamos email y password a la API
       final response = await http.post(
-        Uri.parse(
-          'http://localhost/APP_1601/flutter_application_1/php/api.php', //Ruta Diany Enamorado
-          //'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php' //Ruta Angel Perez
-          //'http://localhost/Proyecto_APP/Proyecto_APP/flutter_application_1/php/api.php', //Ruta Jhair Rios
-          //'http://localhost/Proyecto/APP_1601/flutter_application_1/php/api.php' //Ruta Derick Dair
-        ),
+        Uri.parse(API_BASE_URL),
         body: {
           'email': _emailController.text.trim(),
           'password': _passwordController.text,
