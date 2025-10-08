@@ -99,7 +99,7 @@ try {
                     $nombre,
                     $correo,
                     $telefono,
-                    md5($contrasena), // Usando MD5 como en el login
+                    $contrasena, // ✅ SIN ENCRIPTACIÓN: Contraseña en texto plano
                     $id_rol
                 ]);
                 
@@ -228,7 +228,7 @@ try {
                         $nombre,
                         $correo,
                         $telefono,
-                        md5($password),
+                        $password, // ✅ SIN ENCRIPTACIÓN: Contraseña en texto plano
                         $id_rol,
                         $activo,
                         $id_usuario
@@ -369,7 +369,7 @@ try {
             // Crear nuevo usuario
             try {
                 $stmt = $pdo->prepare("INSERT INTO usuarios (Nombre, Correo, Contrasena, activo, Id_Rol) VALUES (?, ?, ?, 1, 2)");
-                $stmt->execute([$nombre, $email, md5($password)]);
+                $stmt->execute([$nombre, $email, $password]); // ✅ SIN ENCRIPTACIÓN: Contraseña en texto plano
                 
                 $newUserId = $pdo->lastInsertId();
                 
@@ -412,11 +412,11 @@ try {
                 
                 // Generar nueva contraseña temporal (8 caracteres alfanuméricos)
                 $newPassword = substr(str_shuffle('abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'), 0, 8);
-                $hashedPassword = md5($newPassword);
                 
                 // Actualizar la contraseña en la base de datos
+                // ✅ SIN ENCRIPTACIÓN: Guardar contraseña en texto plano
                 $updateStmt = $pdo->prepare("UPDATE usuarios SET Contrasena = ? WHERE Id_Usuario = ?");
-                $success = $updateStmt->execute([$hashedPassword, $user['Id_Usuario']]);
+                $success = $updateStmt->execute([$newPassword, $user['Id_Usuario']]);
                 
                 if ($success) {
                     echo json_encode([
@@ -448,9 +448,9 @@ try {
         }
         
         // Buscar usuario en la base de datos
-        // ✅ CORREGIDO: Usar MD5 para hashear la contraseña antes de comparar
+        // ✅ SIN ENCRIPTACIÓN: Comparar contraseña en texto plano
         $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE Correo = ? AND Contrasena = ? AND activo = 1");
-        $stmt->execute([$email, md5($password)]);
+        $stmt->execute([$email, $password]);
         $user = $stmt->fetch();
         
         if ($user) {
