@@ -448,12 +448,18 @@ try {
         }
         
         // Buscar usuario en la base de datos
-        // ✅ SIN ENCRIPTACIÓN: Comparar contraseña en texto plano
-        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE Correo = ? AND Contrasena = ? AND activo = 1");
-        $stmt->execute([$email, $password]);
+        // ✅ SISTEMA HÍBRIDO: Probar ambas versiones (texto plano y MD5)
+        $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE Correo = ? AND (Contrasena = ? OR Contrasena = ?) AND activo = 1");
+        $stmt->execute([$email, $password, md5($password)]);
         $user = $stmt->fetch();
         
         if ($user) {
+            // ✅ MIGRACIÓN AUTOMÁTICA: Si la contraseña actual es MD5, actualizarla a texto plano
+            if ($user['Contrasena'] === md5($password) && $user['Contrasena'] !== $password) {
+                $updateStmt = $pdo->prepare("UPDATE usuarios SET Contrasena = ? WHERE Id_Usuario = ?");
+                $updateStmt->execute([$password, $user['Id_Usuario']]);
+            }
+            
             // Usuario encontrado y activo
             echo json_encode([
                 'success' => true, 
