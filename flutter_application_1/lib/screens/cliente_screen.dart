@@ -1,4 +1,6 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
+import '../services/restaurante_service.dart';
 
 class ClienteScreen extends StatefulWidget {
   const ClienteScreen({super.key});
@@ -19,8 +21,7 @@ class _ClienteScreenState extends State<ClienteScreen>
   late AnimationController _scaleController;
   late AnimationController _slideController;
   late Animation<double> _fadeAnimation;
-  late Animation<double> _scaleAnimation;
-  late Animation<Offset> _slideAnimation;
+  // _scaleAnimation y _slideAnimation fueron eliminadas porque no se usan
 
   // Categorías de productos
   final List<String> _categories = [
@@ -89,6 +90,11 @@ class _ClienteScreenState extends State<ClienteScreen>
     },
   ];
 
+  // Lista cargada desde la API
+  List<Map<String, dynamic>> _restaurantes = [];
+  // Indica si ya se abrió automáticamente el formulario al entrar
+  bool _openedRestauranteForm = false;
+
   @override
   void initState() {
     super.initState();
@@ -114,19 +120,144 @@ class _ClienteScreenState extends State<ClienteScreen>
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
 
-    _scaleAnimation = Tween<double>(begin: 0.8, end: 1.0).animate(
-      CurvedAnimation(parent: _scaleController, curve: Curves.elasticOut),
-    );
-
-    _slideAnimation =
-        Tween<Offset>(begin: const Offset(0, 0.5), end: Offset.zero).animate(
-          CurvedAnimation(parent: _slideController, curve: Curves.easeOutCubic),
-        );
+    // Nota: las animaciones específicas de escala/slide se controlan directamente
+    // usando los AnimationControllers cuando se necesitan en tiempo de ejecución.
 
     // ✅ Iniciar animaciones
     _fadeController.forward();
     _scaleController.forward();
     _slideController.forward();
+    // Cargar restaurantes desde la API
+    _cargarRestaurantes();
+  }
+
+  // ---------- Helpers para CRUD de restaurantes ----------
+  void _mostrarFormularioRestaurante({Map<String, dynamic>? restaurante}) {
+    // Prellenar usando las claves normalizadas (id, nombre, direccion, telefono, correo, logo)
+    final nombreCtrl = TextEditingController(text: restaurante?['nombre'] ?? restaurante?['name'] ?? '');
+    final direccionCtrl = TextEditingController(text: restaurante?['direccion'] ?? restaurante?['description'] ?? '');
+    final telefonoCtrl = TextEditingController(text: restaurante?['telefono']?.toString() ?? '');
+    final correoCtrl = TextEditingController(text: restaurante?['correo'] ?? '');
+    final logoCtrl = TextEditingController(text: restaurante?['logo'] ?? restaurante?['image'] ?? '');
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(restaurante == null ? 'Nuevo Restaurante' : 'Editar Restaurante'),
+        content: SingleChildScrollView(
+          child: Column(
+            children: [
+              TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
+              TextField(controller: direccionCtrl, decoration: const InputDecoration(labelText: 'Dirección')),
+              TextField(controller: telefonoCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono')),
+              TextField(controller: correoCtrl, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Correo')),
+              TextField(controller: logoCtrl, decoration: const InputDecoration(labelText: 'Logo (ruta o URL)')),
+            ],
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          ElevatedButton(
+            onPressed: () async {
+              // Enviar exactamente las claves que espera la API
+              final body = {
+                'id': restaurante != null ? (restaurante['id'] ?? '').toString() : '',
+                'nombre': nombreCtrl.text.trim(),
+                'direccion': direccionCtrl.text.trim(),
+                'telefono': telefonoCtrl.text.trim(),
+                'correo': correoCtrl.text.trim(),
+                'logo': logoCtrl.text.trim(),
+              };
+
+              Navigator.pop(context);
+              if (body['id'] == null || (body['id'] as String).isEmpty) {
+                await _crearRestaurante(body);
+              } else {
+                await _actualizarRestaurante(body);
+              }
+            },
+            child: const Text('Guardar'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _crearRestaurante(Map<String, dynamic> body) async {
+    final resp = await RestauranteService.createRestaurante(body);
+    if (resp['success'] == true) {
+      await _cargarRestaurantes();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restaurante creado')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
+    }
+  }
+
+  Future<void> _actualizarRestaurante(Map<String, dynamic> body) async {
+    final resp = await RestauranteService.updateRestaurante(body);
+    if (resp['success'] == true) {
+      await _cargarRestaurantes();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restaurante actualizado')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
+    }
+  }
+
+  Future<void> _eliminarRestaurante(String id) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar'),
+        content: const Text('¿Eliminar este restaurante?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
+          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    final resp = await RestauranteService.deleteRestaurante(id);
+    if (resp['success'] == true) {
+      await _cargarRestaurantes();
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restaurante eliminado')));
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
+    }
+  }
+
+  Future<void> _cargarRestaurantes() async {
+    try {
+      final data = await RestauranteService.getRestaurantes();
+      setState(() {
+        // Mapear campos de la tabla restaurante a la estructura que usaremos en el formulario
+        // Claves: id, nombre, logo, direccion, telefono, correo
+        _restaurantes = data.map((r) {
+          final idVal = r['Restaurante_ID'] ?? r['id'];
+          final logoVal = (r['Logo'] ?? r['logo'] ?? '').toString();
+          return {
+            'id': idVal != null ? idVal.toString() : '',
+            'nombre': r['Nombre'] ?? r['nombre'] ?? '',
+            'direccion': r['Direccion'] ?? r['direccion'] ?? '',
+            'logo': logoVal.isEmpty ? 'assets/LogoPinequitas.png' : logoVal,
+            'telefono': r['Telefono'] ?? r['telefono'] ?? '',
+            'correo': r['Correo'] ?? r['correo'] ?? '',
+          };
+        }).toList();
+      });
+      // Si hay al menos un restaurante disponible y aún no abrimos el formulario,
+      // programamos abrirlo en el siguiente frame para que el Build ya esté listo.
+      if (!_openedRestauranteForm && _restaurantes.isNotEmpty) {
+        _openedRestauranteForm = true;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) {
+            _mostrarFormularioRestaurante(restaurante: _restaurantes[0]);
+          }
+        });
+      }
+    } catch (e) {
+      // No bloquear la UI si falla la carga
+      // print('Error cargando restaurantes: $e');
+    }
   }
 
   @override
@@ -247,6 +378,17 @@ class _ClienteScreenState extends State<ClienteScreen>
             },
             icon: const Icon(Icons.logout),
           ),
+          IconButton(
+            onPressed: () {
+              if (_restaurantes.isNotEmpty) {
+                _mostrarFormularioRestaurante(restaurante: _restaurantes[0]);
+              } else {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay restaurante cargado')));
+              }
+            },
+            icon: const Icon(Icons.edit),
+            tooltip: 'Editar restaurante',
+          ),
         ],
       ),
       body: AnimatedSwitcher(
@@ -339,12 +481,61 @@ class _ClienteScreenState extends State<ClienteScreen>
     Color colorNaranja,
     Color colorVerde,
   ) {
-    // Filtrar productos por categoría
+    // Si hay al menos un restaurante, mostrar su detalle en la parte superior
+    if (_restaurantes.isNotEmpty) {
+      final r = _restaurantes[0];
+      final logoVal = (r['Logo'] ?? r['logo'] ?? r['logo_path'] ?? '').toString();
+      Widget logoWidget;
+      if (logoVal.isEmpty) {
+        logoWidget = Icon(Icons.restaurant, color: colorPrimario, size: 48);
+      } else if (logoVal.startsWith('/') || logoVal.startsWith('http')) {
+        final hostBase = 'http://192.168.10.125'; // ajusta según tu entorno
+        final url = logoVal.startsWith('http') ? logoVal : hostBase + logoVal;
+        logoWidget = ClipRRect(
+          borderRadius: BorderRadius.circular(8),
+          child: Image.network(url, width: 96, height: 96, fit: BoxFit.cover, errorBuilder: (c, e, s) => Icon(Icons.broken_image, color: colorPrimario)),
+        );
+      } else {
+        // intentar base64
+        try {
+          final bytes = base64Decode(logoVal);
+          logoWidget = ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(bytes, width: 96, height: 96, fit: BoxFit.cover));
+        } catch (_) {
+          logoWidget = Icon(Icons.image, color: colorPrimario, size: 48);
+        }
+      }
+
+      return SingleChildScrollView(
+        padding: const EdgeInsets.all(20),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            Container(width: 110, height: 110, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.white), child: Center(child: logoWidget)),
+            const SizedBox(width: 16),
+            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(r['nombre'] ?? '', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorPrimario)),
+              const SizedBox(height: 8),
+              Text('Dirección: ${r['direccion'] ?? r['Direccion'] ?? ''}'),
+              const SizedBox(height: 4),
+              Text('Teléfono: ${r['telefono'] ?? r['Telefono'] ?? ''}'),
+              const SizedBox(height: 4),
+              Text('Correo: ${r['correo'] ?? r['Correo'] ?? ''}'),
+            ])),
+          ]),
+          const SizedBox(height: 20),
+          Row(children: [
+            ElevatedButton.icon(onPressed: () => _mostrarFormularioRestaurante(restaurante: r), icon: const Icon(Icons.edit), label: const Text('Editar')),
+            const SizedBox(width: 12),
+            ElevatedButton.icon(onPressed: () => _eliminarRestaurante(r['id'].toString()), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), icon: const Icon(Icons.delete), label: const Text('Eliminar')),
+          ])
+        ]),
+      );
+    }
+
+    // Filtrar productos por categoría (comportamiento original si no hay restaurantes)
+    final sourceItems = _menuItems;
     List<Map<String, dynamic>> filteredItems = _selectedCategory == 'Todos'
-        ? _menuItems
-        : _menuItems
-              .where((item) => item['category'] == _selectedCategory)
-              .toList();
+        ? sourceItems
+        : sourceItems.where((item) => item['category'] == _selectedCategory).toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -795,6 +986,25 @@ class _ClienteScreenState extends State<ClienteScreen>
                 ),
               ),
             ),
+            // Si el item parece provenir de la tabla restaurante, mostrar acciones
+            if (item.containsKey('telefono') || item.containsKey('correo'))
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    IconButton(
+                      onPressed: () => _mostrarFormularioRestaurante(restaurante: item),
+                      icon: const Icon(Icons.edit, size: 18),
+                    ),
+                    const SizedBox(width: 8),
+                    IconButton(
+                      onPressed: () => _eliminarRestaurante(item['id'].toString()),
+                      icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                    ),
+                  ],
+                ),
+              ),
           ],
         ),
       ),

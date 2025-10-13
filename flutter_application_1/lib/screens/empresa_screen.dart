@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
+import 'dart:convert';
+import '../services/restaurante_service.dart';
 
 class EmpresaScreen extends StatefulWidget {
   const EmpresaScreen({super.key});
@@ -17,7 +19,15 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
 
   // Variables para el logo
   Uint8List? _logoBytes;
+  String? _logoPath;
   final ImagePicker _picker = ImagePicker();
+  // Controllers para los campos del formulario
+  final TextEditingController _nombreCtrl = TextEditingController();
+  final TextEditingController _telefonoCtrl = TextEditingController();
+  final TextEditingController _correoCtrl = TextEditingController();
+  final TextEditingController _direccionCtrl = TextEditingController();
+  String? _restauranteId;
+  String? _debugApiResponse;
 
   // Función para seleccionar imagen
   Future<void> _seleccionarLogo() async {
@@ -107,6 +117,21 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
+              // Estado de diagnóstico
+              if (_restauranteId == null)
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.yellow[100],
+                  child: const Text('Diagnóstico: no se ha cargado información del restaurante. Verifica la API.'),
+                ),
+              if (_debugApiResponse != null) ...[
+                const SizedBox(height: 8),
+                Container(
+                  padding: const EdgeInsets.all(8),
+                  color: Colors.grey[200],
+                  child: SelectableText('API response / error: $_debugApiResponse'),
+                ),
+              ],
               Text(
                 'Configuración de la Empresa',
                 style: TextStyle(
@@ -131,6 +156,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                   ],
                 ),
                 child: TextField(
+                  controller: _nombreCtrl,
                   style: TextStyle(color: colorTexto),
                   decoration: InputDecoration(
                     filled: true,
@@ -164,6 +190,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                   ],
                 ),
                 child: TextField(
+                  controller: _telefonoCtrl,
                   keyboardType: TextInputType.phone,
                   style: TextStyle(color: colorTexto),
                   decoration: InputDecoration(
@@ -198,6 +225,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                   ],
                 ),
                 child: TextField(
+                  controller: _correoCtrl,
                   keyboardType: TextInputType.emailAddress,
                   style: TextStyle(color: colorTexto),
                   decoration: InputDecoration(
@@ -232,6 +260,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                   ],
                 ),
                 child: TextField(
+                  controller: _direccionCtrl,
                   maxLines: 3,
                   style: TextStyle(color: colorTexto),
                   decoration: InputDecoration(
@@ -275,7 +304,7 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                     padding: const EdgeInsets.all(20.0),
                     child: Column(
                       children: [
-                        // Mostrar logo seleccionado o ícono placeholder
+                         // Mostrar logo seleccionado (bytes) o logo desde ruta pública, o ícono placeholder
                         Container(
                           height: 120,
                           width: 120,
@@ -286,25 +315,32 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                               width: 2,
                             ),
                           ),
-                          child: _logoBytes != null
-                              ? ClipRRect(
-                                  borderRadius: BorderRadius.circular(10),
-                                  child: Image.memory(
-                                    _logoBytes!,
-                                    fit: BoxFit.cover,
-                                  ),
-                                )
-                              : Icon(
-                                  Icons.image,
-                                  size: 48,
-                                  color: colorPrimario.withOpacity(0.6),
-                                ),
+                           child: _logoBytes != null
+                               ? ClipRRect(
+                                   borderRadius: BorderRadius.circular(10),
+                                   child: Image.memory(
+                                     _logoBytes!,
+                                     fit: BoxFit.cover,
+                                   ),
+                                 )
+                               : (_logoPath != null && _logoPath!.isNotEmpty)
+                                   ? ClipRRect(
+                                       borderRadius: BorderRadius.circular(10),
+                                       child: Image.network(
+                                         _logoPath!.startsWith('http') ? _logoPath! : 'http://192.168.10.125' + _logoPath!,
+                                         fit: BoxFit.cover,
+                                         errorBuilder: (c, e, s) => Icon(Icons.broken_image, color: colorPrimario.withOpacity(0.6)),
+                                       ),
+                                     )
+                                   : Icon(
+                                       Icons.image,
+                                       size: 48,
+                                       color: colorPrimario.withOpacity(0.6),
+                                     ),
                         ),
                         const SizedBox(height: 16),
                         Text(
-                          _logoBytes != null
-                              ? 'Logo Seleccionado'
-                              : 'Logo de la Empresa',
+                          _logoBytes != null ? 'Logo Seleccionado' : 'Logo de la Empresa',
                           style: TextStyle(
                             fontSize: 16,
                             fontWeight: FontWeight.bold,
@@ -372,8 +408,51 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
                   ],
                 ),
                 child: ElevatedButton(
-                  onPressed: () {
-                    // TODO: Implementar lógica para guardar información de la empresa
+                  onPressed: () async {
+                    // Construir body para enviar a la API
+                    final body = {
+                      'id': _restauranteId ?? '',
+                      'nombre': _nombreCtrl.text.trim(),
+                      'direccion': _direccionCtrl.text.trim(),
+                      'telefono': _telefonoCtrl.text.trim(),
+                      'correo': _correoCtrl.text.trim(),
+                      'logo': '',
+                    };
+
+                    if (_logoBytes != null) {
+                      // Enviar logo como base64 (por simplicidad). En producción preferir multipart.
+                      body['logo'] = base64Encode(_logoBytes!);
+                    }
+
+                    // Validación en cliente: nombre es obligatorio
+                    if (_nombreCtrl.text.trim().isEmpty) {
+                      setState(() { _debugApiResponse = 'validation: Nombre requerido'; });
+                      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Nombre requerido')));
+                      return;
+                    }
+
+                    // Si no existe id, crear; si existe, actualizar
+                    Map<String, dynamic> resp;
+                    try {
+                      if (body['id'] == null || (body['id'] as String).isEmpty) {
+                        resp = await RestauranteService.createRestaurante(body);
+                      } else {
+                        resp = await RestauranteService.updateRestaurante(body);
+                      }
+                      setState(() {
+                        _debugApiResponse = resp.toString();
+                      });
+                      if (resp['success'] == true) {
+                        // Recargar datos actualizados
+                        await _cargarEmpresa();
+                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Información guardada')));
+                      } else {
+                        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message']?.toString() ?? 'Error')));
+                      }
+                    } catch (e) {
+                      setState(() { _debugApiResponse = e.toString(); });
+                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error guardando: $e')));
+                    }
                   },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorPrimario,
@@ -394,5 +473,64 @@ class _EmpresaScreenState extends State<EmpresaScreen> {
         ),
       ),
     );
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _cargarEmpresa();
+  }
+
+  Future<void> _cargarEmpresa() async {
+    try {
+      final data = await RestauranteService.getRestaurantes();
+      setState(() {
+        _debugApiResponse = null;
+      });
+      if (data.isNotEmpty) {
+        final r = data[0];
+        setState(() {
+          _restauranteId = (r['Restaurante_ID'] ?? r['id']).toString();
+          _nombreCtrl.text = (r['Nombre'] ?? r['nombre'] ?? '').toString();
+          _telefonoCtrl.text = (r['Telefono'] ?? r['telefono'] ?? '').toString();
+          _correoCtrl.text = (r['Correo'] ?? r['correo'] ?? '').toString();
+          _direccionCtrl.text = (r['Direccion'] ?? r['direccion'] ?? '').toString();
+           final logoVal = (r['Logo'] ?? r['logo'] ?? '').toString();
+           // Si el logo es una ruta (comienza con / o http), guardamos la ruta en _logo (cadena)
+           // Sólo usamos _logoBytes si el usuario seleccionó una imagen localmente.
+           if (logoVal.isNotEmpty) {
+             if (logoVal.startsWith('/') || logoVal.startsWith('http')) {
+               // Guardamos la ruta como string en _logoBytes = null (la vista usará la ruta)
+               _logoBytes = null;
+               // También guardamos la ruta en una propiedad temporal para mostrar network image
+               // (usamos la variable _debugApiResponse para debugging; no es ideal — si quieres podemos añadir _logoPath)
+               // Para mejor soporte, añadiremos _logoPath
+               _logoPath = logoVal;
+             } else {
+               try {
+                 _logoBytes = base64Decode(logoVal);
+                 _logoPath = null;
+               } catch (_) {
+                 _logoBytes = null;
+                 _logoPath = null;
+               }
+             }
+           }
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _debugApiResponse = e.toString();
+      });
+    }
+  }
+
+  @override
+  void dispose() {
+    _nombreCtrl.dispose();
+    _telefonoCtrl.dispose();
+    _correoCtrl.dispose();
+    _direccionCtrl.dispose();
+    super.dispose();
   }
 }
