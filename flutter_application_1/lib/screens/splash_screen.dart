@@ -1,136 +1,79 @@
 import 'package:flutter/material.dart';
-import 'login_screen.dart';
+import 'package:flutter_application_1/screens/login_screen.dart';
 
-class SplashScreen extends StatelessWidget {
+class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
   @override
+  _SplashScreenState createState() => _SplashScreenState();
+}
+
+class _SplashScreenState extends State<SplashScreen>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<double> _animation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _controller = AnimationController(
+      duration: const Duration(seconds: 2),
+      vsync: this,
+    );
+
+    _animation = CurvedAnimation(parent: _controller, curve: Curves.easeInOut);
+
+    _controller.forward();
+
+    Future.delayed(const Duration(seconds: 3), () {
+      Navigator.pushReplacement(
+        context,
+        MaterialPageRoute(builder: (context) => const LoginScreen()),
+      );
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    const Color colorFondo = Color.fromARGB(255, 255, 255, 255);
-    const Color colorPrimario = Color.fromRGBO(0, 20, 34, 1);
     return Scaffold(
-      backgroundColor: colorFondo,
+      backgroundColor: Colors.white,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // ✅ LOGO CON ESTILO CONSISTENTE (igual que registro de usuario)
             Container(
-              padding: const EdgeInsets.all(20),
+              width: 150,
+              height: 150,
               decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.grey.withOpacity(0.1),
-                    spreadRadius: 3,
-                    blurRadius: 10,
-                    offset: const Offset(0, 3),
-                  ),
-                ],
+                shape: BoxShape.circle,
+                border: Border.all(
+                  color: Colors.grey[300]!,
+                  width: 4,
+                ), // Gris claro
               ),
-              child: Column(
-                children: [
-                  // Logo circular con borde elegante
-                  Container(
-                    width: 120,
-                    height: 120,
-                    decoration: BoxDecoration(
-                      shape: BoxShape.circle,
-                      border: Border.all(
-                        color: colorPrimario.withOpacity(0.2),
-                        width: 3,
-                      ),
-                      boxShadow: [
-                        BoxShadow(
-                          color: colorPrimario.withOpacity(0.1),
-                          spreadRadius: 2,
-                          blurRadius: 8,
-                          offset: const Offset(0, 2),
-                        ),
-                      ],
-                    ),
-                    child: ClipOval(
-                      child: Image.asset(
-                        'assets/LogoPinequitas.png',
-                        fit: BoxFit.cover,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Título de la app
-                  Text(
-                    'Pedidos1601',
-                    style: TextStyle(
-                      color: colorPrimario,
-                      fontSize: 24,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 0.5,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Subtítulo
-                  Text(
-                    'Sistema de gestión de pedidos',
-                    style: TextStyle(
-                      color: Colors.grey[600],
-                      fontSize: 14,
-                      fontWeight: FontWeight.w400,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 40),
-            SizedBox(
-              width: 200,
-              height: 48,
-              child: ElevatedButton(
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (context) => const LoginScreen(),
-                    ),
-                  );
-                },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: colorPrimario,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                  elevation: 4,
-                ),
-                child: const Text(
-                  'Iniciar sesión',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              child: ClipOval(
+                child: Image.asset(
+                  'assets/LogoPinequitas.png',
+                  fit: BoxFit.cover,
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            // Botón de Registro de Usuario
-            SizedBox(
-              width: 200,
-              height: 48,
-              child: OutlinedButton(
-                onPressed: () {
-                  Navigator.pushNamed(context, '/registro');
-                },
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorPrimario,
-                  side: BorderSide(color: colorPrimario, width: 2),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(16),
-                  ),
-                ),
-                child: const Text(
-                  'Registrarse',
-                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            const SizedBox(height: 20),
+            FadeTransition(
+              opacity: _animation,
+              child: const Text(
+                'Bienvenido a las Pinequitas',
+                style: TextStyle(
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                  color: Colors.black, // Texto en negro
                 ),
               ),
             ),
