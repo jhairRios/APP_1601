@@ -64,8 +64,30 @@ class _AdminScreenState extends State<AdminScreen> {
         actions: [
           IconButton(
             onPressed: () {
-              // Cerrar sesión
-              Navigator.pushReplacementNamed(context, '/login');
+              showDialog(
+                context: context,
+                builder: (BuildContext context) {
+                  return AlertDialog(
+                    title: const Text('Confirmación'),
+                    content: const Text(
+                      '¿Estás seguro de que deseas cerrar sesión?',
+                    ),
+                    actions: [
+                      TextButton(
+                        onPressed: () => Navigator.of(context).pop(),
+                        child: const Text('Cancelar'),
+                      ),
+                      TextButton(
+                        onPressed: () {
+                          Navigator.of(context).pop();
+                          Navigator.pushReplacementNamed(context, '/login');
+                        },
+                        child: const Text('Aceptar'),
+                      ),
+                    ],
+                  );
+                },
+              );
             },
             icon: const Icon(Icons.logout),
           ),
