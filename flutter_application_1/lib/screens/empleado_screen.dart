@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 class EmpleadoScreen extends StatefulWidget {
   const EmpleadoScreen({super.key});
@@ -286,7 +287,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             width: double.infinity,
             child: ElevatedButton.icon(
               onPressed: () {
-                // Agregar nuevo platillo
+                _mostrarFormularioPlatilloEmpleado(context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: colorAccento,
@@ -943,6 +944,180 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         ],
       ),
     );
+  }
+
+  void _mostrarFormularioPlatilloEmpleado(BuildContext context) {
+    final TextEditingController nombreController = TextEditingController();
+    final TextEditingController precioController = TextEditingController();
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: Colors.white,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Agregar Nuevo Platillo',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueAccent,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Campo Nombre del Platillo
+                  TextField(
+                    controller: nombreController,
+                    style: TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Nombre del platillo',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.restaurant_menu,
+                        color: Colors.blueAccent,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Campo Precio
+                  TextField(
+                    controller: precioController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Precio (ej: 12.99)',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.attach_money,
+                        color: Colors.green.shade600,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Campo para agregar imagen
+                  Text(
+                    'Imagen del Platillo',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.black,
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  ElevatedButton.icon(
+                    onPressed: () => _seleccionarImagen(context),
+                    icon: const Icon(Icons.image, color: Colors.white),
+                    label: const Text('Seleccionar Imagen'),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Botón Guardar
+                  ElevatedButton(
+                    onPressed: () {
+                      // Lógica para guardar el platillo
+                      Navigator.of(context).pop();
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text(
+                      'Guardar',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _seleccionarImagen(BuildContext context) async {
+    final ImagePicker picker = ImagePicker();
+    final XFile? imagen = await picker.pickImage(source: ImageSource.gallery);
+
+    if (imagen != null) {
+      // Lógica para manejar la imagen seleccionada
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Imagen seleccionada: ${imagen.name}')),
+      );
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No se seleccionó ninguna imagen')),
+      );
+    }
   }
 
   String _getOrderStatus(int index) {
