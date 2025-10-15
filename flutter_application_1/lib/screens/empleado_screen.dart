@@ -949,6 +949,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   void _mostrarFormularioPlatilloEmpleado(BuildContext context) {
     final TextEditingController nombreController = TextEditingController();
     final TextEditingController precioController = TextEditingController();
+    final TextEditingController descripcionController = TextEditingController();
+    int? categoriaSeleccionada;
+    int? estadoSeleccionado;
 
     showDialog(
       context: context,
@@ -1045,6 +1048,108 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         ),
                       ),
                     ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Campo Descripción
+                  TextField(
+                    controller: descripcionController,
+                    maxLines: 3,
+                    style: TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Descripción del platillo',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Campo Categoría
+                  DropdownButtonFormField<int>(
+                    value: categoriaSeleccionada,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Seleccionar Categoría',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('Entradas')),
+                      DropdownMenuItem(value: 2, child: Text('Platos Fuertes')),
+                      DropdownMenuItem(value: 3, child: Text('Postres')),
+                      DropdownMenuItem(value: 4, child: Text('Bebidas')),
+                    ],
+                    onChanged: (value) {
+                      categoriaSeleccionada = value;
+                    },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Campo Estado
+                  DropdownButtonFormField<int>(
+                    value: estadoSeleccionado,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Seleccionar Estado',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('Disponible')),
+                      DropdownMenuItem(value: 2, child: Text('No Disponible')),
+                    ],
+                    onChanged: (value) {
+                      estadoSeleccionado = value;
+                    },
                   ),
                   const SizedBox(height: 16),
 
