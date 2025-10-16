@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../services/menu_service.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -14,23 +15,27 @@ class _MenuScreenState extends State<MenuScreen> {
   final Color colorPrimario = const Color.fromRGBO(0, 20, 34, 1);
 
   // Lista de platillos registrados
-  final List<Map<String, dynamic>> _platillos = [
-    {
-      'nombre': 'Hamburguesa Clásica',
-      'precio': 12.99,
-      'imagen': 'assets/LogoPinequitas.png', // Placeholder image
-    },
-    {
-      'nombre': 'Pizza Margherita',
-      'precio': 18.50,
-      'imagen': 'assets/LogoPinequitas.png', // Placeholder image
-    },
-    {
-      'nombre': 'Ensalada César',
-      'precio': 9.75,
-      'imagen': 'assets/LogoPinequitas.png', // Placeholder image
-    },
-  ];
+  List<Map<String, dynamic>> _platillos = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchPlatillos();
+  }
+
+  Future<void> _fetchPlatillos() async {
+    try {
+      final platillos = await MenuService.getMenuItems();
+      print('Datos obtenidos: $platillos'); // Log para verificar datos
+      setState(() {
+        _platillos = List<Map<String, dynamic>>.from(platillos)
+            .where((platillo) => platillo['ID_Estado'] == 1)
+            .toList();
+      });
+    } catch (e) {
+      print('Error fetching platillos: $e');
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -113,53 +118,48 @@ class _MenuScreenState extends State<MenuScreen> {
 
             // Lista de platillos en cards
             Expanded(
-              child: ListView.builder(
-                itemCount: _platillos.length,
-                itemBuilder: (context, index) {
-                  final platillo = _platillos[index];
-                  return Container(
-                    margin: const EdgeInsets.only(bottom: 16),
-                    child: Card(
-                      elevation: 4,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(16),
+              child: _platillos.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No hay platillos disponibles.',
+                        style: TextStyle(fontSize: 16, color: colorPrimario),
                       ),
-                      child: Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          color: Colors.white,
-                          boxShadow: [
-                            BoxShadow(
-                              color: colorPrimario.withOpacity(0.1),
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
+                    )
+                  : ListView.builder(
+                      itemCount: _platillos.length,
+                      itemBuilder: (context, index) {
+                        final platillo = _platillos[index];
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 16),
+                          child: Card(
+                            elevation: 4,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(16),
                             ),
-                          ],
-                        ),
-                        child: Padding(
-                          padding: const EdgeInsets.all(20.0),
-                          child: Row(
-                            children: [
-                              // Imagen del platillo
-                              Container(
-                                width: 80,
-                                height: 80,
-                                decoration: BoxDecoration(
-                                  borderRadius: BorderRadius.circular(12),
-                                  color: Colors.grey.shade200,
-                                  border: Border.all(
-                                    color: colorPrimario.withOpacity(0.3),
-                                    width: 1,
-                                  ),
-                                ),
-                                child: ClipRRect(
-                                  borderRadius: BorderRadius.circular(12),
-                                  child: platillo['imagen'] != null
-                                      ? Image.asset(
-                                          platillo['imagen'],
-                                          fit: BoxFit.cover,
-                                          errorBuilder:
-                                              (context, error, stackTrace) {
+                            child: Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Row(
+                                children: [
+                                  // Imagen del platillo
+                                  Container(
+                                    width: 80,
+                                    height: 80,
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(12),
+                                      color: Colors.grey.shade200,
+                                      border: Border.all(
+                                        color: colorPrimario.withOpacity(0.3),
+                                        width: 1,
+                                      ),
+                                    ),
+                                    child: ClipRRect(
+                                      borderRadius: BorderRadius.circular(12),
+                                      child: platillo['Imagen'] != null
+                                          ? Image.network(
+                                              platillo['Imagen'],
+                                              fit: BoxFit.cover,
+                                              errorBuilder:
+                                                  (context, error, stackTrace) {
                                                 return Container(
                                                   color: Colors.grey.shade300,
                                                   child: Icon(
@@ -169,129 +169,23 @@ class _MenuScreenState extends State<MenuScreen> {
                                                   ),
                                                 );
                                               },
-                                        )
-                                      : Container(
-                                          color: Colors.grey.shade300,
-                                          child: Icon(
-                                            Icons.restaurant,
-                                            color: colorPrimario,
-                                            size: 40,
-                                          ),
-                                        ),
-                                ),
+                                            )
+                                          : Container(
+                                              color: Colors.grey.shade300,
+                                              child: Icon(
+                                                Icons.restaurant,
+                                                color: colorPrimario,
+                                                size: 40,
+                                              ),
+                                            ),
+                                    ),
+                                  ),
+                                ],
                               ),
-                              const SizedBox(width: 16),
-
-                              // Información del platillo
-                              Expanded(
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    // Nombre del platillo
-                                    Text(
-                                      platillo['nombre'] ?? '',
-                                      style: TextStyle(
-                                        fontSize: 18,
-                                        fontWeight: FontWeight.bold,
-                                        color: colorTexto,
-                                      ),
-                                    ),
-                                    const SizedBox(height: 8),
-
-                                    // Precio
-                                    Row(
-                                      children: [
-                                        Icon(
-                                          Icons.attach_money,
-                                          size: 16,
-                                          color: Colors.green.shade600,
-                                        ),
-                                        Text(
-                                          '\$${platillo['precio']?.toStringAsFixed(2) ?? '0.00'}',
-                                          style: TextStyle(
-                                            fontSize: 16,
-                                            fontWeight: FontWeight.bold,
-                                            color: Colors.green.shade600,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                    const SizedBox(height: 12),
-
-                                    // Botones de acción
-                                    Row(
-                                      mainAxisAlignment: MainAxisAlignment.end,
-                                      children: [
-                                        OutlinedButton.icon(
-                                          onPressed: () {
-                                            // TODO: Implementar edición de platillo
-                                          },
-                                          icon: Icon(
-                                            Icons.edit,
-                                            size: 16,
-                                            color: colorPrimario,
-                                          ),
-                                          label: Text(
-                                            'Editar',
-                                            style: TextStyle(
-                                              color: colorPrimario,
-                                            ),
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            side: BorderSide(
-                                              color: colorPrimario,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                          ),
-                                        ),
-                                        const SizedBox(width: 8),
-                                        OutlinedButton.icon(
-                                          onPressed: () {
-                                            // TODO: Implementar eliminación de platillo
-                                          },
-                                          icon: const Icon(
-                                            Icons.delete,
-                                            size: 16,
-                                            color: Colors.red,
-                                          ),
-                                          label: const Text(
-                                            'Eliminar',
-                                            style: TextStyle(color: Colors.red),
-                                          ),
-                                          style: OutlinedButton.styleFrom(
-                                            side: const BorderSide(
-                                              color: Colors.red,
-                                            ),
-                                            shape: RoundedRectangleBorder(
-                                              borderRadius:
-                                                  BorderRadius.circular(8),
-                                            ),
-                                            padding: const EdgeInsets.symmetric(
-                                              horizontal: 12,
-                                              vertical: 8,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ],
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
+                            ),
+                          );
+                        },
                       ),
-                    ),
-                  );
-                },
-              ),
             ),
           ],
         ),
@@ -299,7 +193,6 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
-  // Modal para agregar/editar platillo
   void _mostrarFormularioPlatillo(BuildContext context) {
     final TextEditingController nombreController = TextEditingController();
     final TextEditingController precioController = TextEditingController();
@@ -336,109 +229,27 @@ class _MenuScreenState extends State<MenuScreen> {
                   // Campo Nombre del Platillo
                   TextField(
                     controller: nombreController,
-                    style: TextStyle(color: colorTexto),
                     decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Nombre del platillo',
-                      hintStyle: TextStyle(color: colorTexto.withOpacity(0.6)),
-                      prefixIcon: Icon(
-                        Icons.restaurant_menu,
-                        color: colorPrimario,
-                      ),
-                      enabledBorder: OutlineInputBorder(
+                      labelText: 'Nombre del Platillo',
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: colorPrimario, width: 1),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: colorPrimario, width: 2),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
+                  const SizedBox(height: 20),
 
-                  // Campo Precio
+                  // Campo Precio del Platillo
                   TextField(
                     controller: precioController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    style: TextStyle(color: colorTexto),
+                    keyboardType: TextInputType.number,
                     decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Precio (ej: 12.99)',
-                      hintStyle: TextStyle(color: colorTexto.withOpacity(0.6)),
-                      prefixIcon: Icon(
-                        Icons.attach_money,
-                        color: Colors.green.shade600,
-                      ),
-                      enabledBorder: OutlineInputBorder(
+                      labelText: 'Precio',
+                      border: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: colorPrimario, width: 1),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: colorPrimario, width: 2),
                       ),
                     ),
                   ),
-                  const SizedBox(height: 16),
-
-                  // Sección de imagen
-                  Container(
-                    padding: const EdgeInsets.all(16),
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(
-                        color: colorPrimario.withOpacity(0.3),
-                        width: 1,
-                      ),
-                      color: Colors.grey.shade50,
-                    ),
-                    child: Column(
-                      children: [
-                        Icon(Icons.image, size: 48, color: colorPrimario),
-                        const SizedBox(height: 8),
-                        Text(
-                          'Imagen del Platillo',
-                          style: TextStyle(
-                            fontSize: 14,
-                            fontWeight: FontWeight.bold,
-                            color: colorTexto,
-                          ),
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          'Selecciona una imagen para el platillo',
-                          style: TextStyle(
-                            fontSize: 12,
-                            color: colorTexto.withOpacity(0.6),
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        const SizedBox(height: 12),
-                        OutlinedButton.icon(
-                          onPressed: () {
-                            // TODO: Implementar selección de imagen
-                          },
-                          icon: Icon(Icons.upload, color: colorPrimario),
-                          label: Text(
-                            'Seleccionar Imagen',
-                            style: TextStyle(color: colorPrimario),
-                          ),
-                          style: OutlinedButton.styleFrom(
-                            side: BorderSide(color: colorPrimario),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 24),
+                  const SizedBox(height: 20),
 
                   // Botones
                   Row(
@@ -473,15 +284,13 @@ class _MenuScreenState extends State<MenuScreen> {
                                 // Agregar platillo a la lista
                                 setState(() {
                                   _platillos.add({
-                                    'nombre': nombreController.text,
-                                    'precio': precio,
-                                    'imagen':
-                                        'assets/Logo.png', // Placeholder por ahora
+                                    'Platillo': nombreController.text,
+                                    'Precio': precio,
+                                    'Descripcion': 'Descripción pendiente',
+                                    'Imagen': null,
                                   });
                                 });
                                 Navigator.of(context).pop();
-
-                                // TODO: Aquí implementar lógica para guardar en base de datos
                               }
                             }
                           },

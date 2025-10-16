@@ -335,6 +335,21 @@ try {
         exit;
     }
 
+    if ($action === 'get_menu') {
+        try {
+            error_log('Acción detectada: get_menu');
+            $stmt = $pdo->prepare("SELECT ID_Menu, Platillo, Precio, Descripcion, ID_Categoria, ID_Estado, Imagen FROM menu ORDER BY ID_Menu");
+            $stmt->execute();
+            $menu_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            error_log('Consulta ejecutada correctamente');
+            echo json_encode(['success' => true, 'menu' => $menu_items]);
+        } catch (PDOException $e) {
+            error_log('Error en la consulta SQL: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Error obteniendo el menú: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     // Si ninguna acción coincide
     echo json_encode(['success' => false, 'message' => 'Acción no reconocida']);
 

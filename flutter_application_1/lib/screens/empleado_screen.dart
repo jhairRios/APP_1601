@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:image_picker/image_picker.dart';
+import '../services/menu_service.dart';
 
 class EmpleadoScreen extends StatefulWidget {
   const EmpleadoScreen({super.key});
@@ -10,6 +10,269 @@ class EmpleadoScreen extends StatefulWidget {
 
 class _EmpleadoScreenState extends State<EmpleadoScreen> {
   int _selectedIndex = 0;
+  List<dynamic> _menuItems = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _fetchMenuItems();
+  }
+
+  Future<void> _fetchMenuItems() async {
+    try {
+      final items = await MenuService.getMenuItems();
+      setState(() {
+        _menuItems = items;
+      });
+    } catch (e) {
+      print('Error fetching menu items: $e');
+    }
+  }
+
+  void _mostrarFormularioPlatilloEmpleado(BuildContext context) {
+    final TextEditingController nombreController = TextEditingController();
+    final TextEditingController precioController = TextEditingController();
+    final TextEditingController descripcionController = TextEditingController();
+    int? categoriaSeleccionada;
+    int? estadoSeleccionado;
+
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            decoration: BoxDecoration(
+              borderRadius: BorderRadius.circular(20),
+              color: Colors.white,
+            ),
+            child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Agregar Nuevo Platillo',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.blueAccent,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 20),
+                  TextField(
+                    controller: nombreController,
+                    style: TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Nombre del platillo',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.restaurant_menu,
+                        color: Colors.blueAccent,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: precioController,
+                    keyboardType: const TextInputType.numberWithOptions(
+                      decimal: true,
+                    ),
+                    style: TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Precio (ej: 12.99)',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      prefixIcon: Icon(
+                        Icons.attach_money,
+                        color: Colors.green.shade600,
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: descripcionController,
+                    maxLines: 3,
+                    style: TextStyle(color: Colors.black),
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Descripción del platillo',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: categoriaSeleccionada,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Seleccionar Categoría',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('Entradas')),
+                      DropdownMenuItem(value: 2, child: Text('Platos Fuertes')),
+                      DropdownMenuItem(value: 3, child: Text('Postres')),
+                      DropdownMenuItem(value: 4, child: Text('Bebidas')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        categoriaSeleccionada = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  DropdownButtonFormField<int>(
+                    value: estadoSeleccionado,
+                    decoration: InputDecoration(
+                      filled: true,
+                      fillColor: Colors.grey.shade50,
+                      hintText: 'Seleccionar Estado',
+                      hintStyle: TextStyle(
+                        color: Colors.black.withOpacity(0.6),
+                      ),
+                      enabledBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 1,
+                        ),
+                      ),
+                      focusedBorder: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                        borderSide: BorderSide(
+                          color: Colors.blueAccent,
+                          width: 2,
+                        ),
+                      ),
+                    ),
+                    items: const [
+                      DropdownMenuItem(value: 1, child: Text('Disponible')),
+                      DropdownMenuItem(value: 2, child: Text('No Disponible')),
+                    ],
+                    onChanged: (value) {
+                      setState(() {
+                        estadoSeleccionado = value;
+                      });
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  ElevatedButton(
+                    onPressed: () async {
+                      try {
+                        final success = await MenuService.addMenuItem({
+                          'Platillo': nombreController.text,
+                          'Precio': precioController.text,
+                          'Descripcion': descripcionController.text,
+                          'ID_Categoria': categoriaSeleccionada,
+                          'ID_Estado': estadoSeleccionado,
+                        });
+                        if (success) {
+                          Navigator.of(context).pop();
+                          _fetchMenuItems();
+                        } else {
+                          throw Exception('Error al guardar el platillo');
+                        }
+                      } catch (e) {
+                        print('Error: $e');
+                      }
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Colors.blueAccent,
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      padding: const EdgeInsets.symmetric(vertical: 16),
+                    ),
+                    child: const Text(
+                      'Guardar',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -304,44 +567,18 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
           const SizedBox(height: 20),
 
-          // Categorías con mejor scroll
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: [
-                _buildCategoryChip('Todos', true, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Entradas', false, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Platos Fuertes', false, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Bebidas', false, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Postres', false, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Sopas', false, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Ensaladas', false, colorPrimario),
-                const SizedBox(width: 8),
-                _buildCategoryChip('Especiales', false, colorPrimario),
-              ],
-            ),
-          ),
-
-          const SizedBox(height: 20),
-
           // Lista de platillos
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
-            itemCount: 5,
+            itemCount: _menuItems.length,
             itemBuilder: (context, index) {
+              final item = _menuItems[index];
               return _buildMenuItemCard(
-                'Platillo ${index + 1}',
-                'Descripción del platillo ${index + 1}',
-                '\$${(index + 1) * 15}.00',
-                true,
+                item['Platillo'],
+                item['Descripcion'],
+                item['Precio'],
+                item['ID_Estado'] == 1,
                 colorPrimario,
                 colorAccento,
               );
@@ -611,30 +848,6 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               textAlign: TextAlign.center,
             ),
           ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCategoryChip(
-    String label,
-    bool isSelected,
-    Color colorPrimario,
-  ) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? colorPrimario : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(
-          color: isSelected ? colorPrimario : Colors.grey[300]!,
-        ),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.grey[700],
-          fontWeight: FontWeight.w500,
         ),
       ),
     );
@@ -944,285 +1157,6 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         ],
       ),
     );
-  }
-
-  void _mostrarFormularioPlatilloEmpleado(BuildContext context) {
-    final TextEditingController nombreController = TextEditingController();
-    final TextEditingController precioController = TextEditingController();
-    final TextEditingController descripcionController = TextEditingController();
-    int? categoriaSeleccionada;
-    int? estadoSeleccionado;
-
-    showDialog(
-      context: context,
-      builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: Colors.white,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Agregar Nuevo Platillo',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.blueAccent,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Campo Nombre del Platillo
-                  TextField(
-                    controller: nombreController,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Nombre del platillo',
-                      hintStyle: TextStyle(
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                      prefixIcon: Icon(
-                        Icons.restaurant_menu,
-                        color: Colors.blueAccent,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 1,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Precio
-                  TextField(
-                    controller: precioController,
-                    keyboardType: const TextInputType.numberWithOptions(
-                      decimal: true,
-                    ),
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Precio (ej: 12.99)',
-                      hintStyle: TextStyle(
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                      prefixIcon: Icon(
-                        Icons.attach_money,
-                        color: Colors.green.shade600,
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 1,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Descripción
-                  TextField(
-                    controller: descripcionController,
-                    maxLines: 3,
-                    style: TextStyle(color: Colors.black),
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Descripción del platillo',
-                      hintStyle: TextStyle(
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 1,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Categoría
-                  DropdownButtonFormField<int>(
-                    value: categoriaSeleccionada,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Seleccionar Categoría',
-                      hintStyle: TextStyle(
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 1,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 1, child: Text('Entradas')),
-                      DropdownMenuItem(value: 2, child: Text('Platos Fuertes')),
-                      DropdownMenuItem(value: 3, child: Text('Postres')),
-                      DropdownMenuItem(value: 4, child: Text('Bebidas')),
-                    ],
-                    onChanged: (value) {
-                      categoriaSeleccionada = value;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo Estado
-                  DropdownButtonFormField<int>(
-                    value: estadoSeleccionado,
-                    decoration: InputDecoration(
-                      filled: true,
-                      fillColor: Colors.grey.shade50,
-                      hintText: 'Seleccionar Estado',
-                      hintStyle: TextStyle(
-                        color: Colors.black.withOpacity(0.6),
-                      ),
-                      enabledBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 1,
-                        ),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(
-                          color: Colors.blueAccent,
-                          width: 2,
-                        ),
-                      ),
-                    ),
-                    items: const [
-                      DropdownMenuItem(value: 1, child: Text('Disponible')),
-                      DropdownMenuItem(value: 2, child: Text('No Disponible')),
-                    ],
-                    onChanged: (value) {
-                      estadoSeleccionado = value;
-                    },
-                  ),
-                  const SizedBox(height: 16),
-
-                  // Campo para agregar imagen
-                  Text(
-                    'Imagen del Platillo',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                      color: Colors.black,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  ElevatedButton.icon(
-                    onPressed: () => _seleccionarImagen(context),
-                    icon: const Icon(Icons.image, color: Colors.white),
-                    label: const Text('Seleccionar Imagen'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Botón Guardar
-                  ElevatedButton(
-                    onPressed: () {
-                      // Lógica para guardar el platillo
-                      Navigator.of(context).pop();
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: Colors.blueAccent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                    ),
-                    child: const Text(
-                      'Guardar',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          ),
-        );
-      },
-    );
-  }
-
-  void _seleccionarImagen(BuildContext context) async {
-    final ImagePicker picker = ImagePicker();
-    final XFile? imagen = await picker.pickImage(source: ImageSource.gallery);
-
-    if (imagen != null) {
-      // Lógica para manejar la imagen seleccionada
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Imagen seleccionada: ${imagen.name}')),
-      );
-    } else {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('No se seleccionó ninguna imagen')),
-      );
-    }
   }
 
   String _getOrderStatus(int index) {

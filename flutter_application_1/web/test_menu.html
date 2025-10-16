@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Menu Service</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+        .menu-item {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Test Menu Service</h1>
+    <div id="menu"></div>
+
+    <script>
+        async function fetchMenu() {
+            try {
+                const response = await fetch('http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php?action=get_menu');
+                if (response.ok) {
+                    const data = await response.json();
+                    if (data.success) {
+                        const menuContainer = document.getElementById('menu');
+                        data.menu.forEach(item => {
+                            const div = document.createElement('div');
+                            div.className = 'menu-item';
+                            div.innerHTML = `
+                                <h2>${item.Platillo}</h2>
+                                <p><strong>Precio:</strong> ${item.Precio}</p>
+                                <p><strong>Descripción:</strong> ${item.Descripcion}</p>
+                            `;
+                            menuContainer.appendChild(div);
+                        });
+                    } else {
+                        document.getElementById('menu').innerText = `Error: ${data.message}`;
+                    }
+                } else {
+                    document.getElementById('menu').innerText = `HTTP Error: ${response.status}`;
+                }
+            } catch (error) {
+                document.getElementById('menu').innerText = `Error: ${error.message}`;
+            }
+        }
+
+        fetchMenu();
+    </script>
+</body>
+</html>
