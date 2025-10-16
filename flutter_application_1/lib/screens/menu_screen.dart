@@ -26,14 +26,15 @@ class _MenuScreenState extends State<MenuScreen> {
   Future<void> _fetchPlatillos() async {
     try {
       final platillos = await MenuService.getMenuItems();
-      print('Datos obtenidos: $platillos'); // Log para verificar datos
+      print('Datos obtenidos de la API: $platillos'); // Log para depuración
       setState(() {
-        _platillos = List<Map<String, dynamic>>.from(platillos)
-            .where((platillo) => platillo['ID_Estado'] == 1)
-            .toList();
+        _platillos = List<Map<String, dynamic>>.from(platillos);
       });
+      print(
+        'Datos procesados para visualización: $_platillos',
+      ); // Log para depuración
     } catch (e) {
-      print('Error fetching platillos: $e');
+      print('Error al obtener o procesar los datos: $e');
     }
   }
 
@@ -138,54 +139,65 @@ class _MenuScreenState extends State<MenuScreen> {
                             ),
                             child: Padding(
                               padding: const EdgeInsets.all(16.0),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  // Imagen del platillo
-                                  Container(
-                                    width: 80,
-                                    height: 80,
-                                    decoration: BoxDecoration(
-                                      borderRadius: BorderRadius.circular(12),
-                                      color: Colors.grey.shade200,
-                                      border: Border.all(
-                                        color: colorPrimario.withOpacity(0.3),
-                                        width: 1,
-                                      ),
+                                  Text(
+                                    'ID: ${platillo['ID_Menu']?.toString() ?? 'Sin ID'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorTexto,
                                     ),
-                                    child: ClipRRect(
-                                      borderRadius: BorderRadius.circular(12),
-                                      child: platillo['Imagen'] != null
-                                          ? Image.network(
-                                              platillo['Imagen'],
-                                              fit: BoxFit.cover,
-                                              errorBuilder:
-                                                  (context, error, stackTrace) {
-                                                return Container(
-                                                  color: Colors.grey.shade300,
-                                                  child: Icon(
-                                                    Icons.restaurant,
-                                                    color: colorPrimario,
-                                                    size: 40,
-                                                  ),
-                                                );
-                                              },
-                                            )
-                                          : Container(
-                                              color: Colors.grey.shade300,
-                                              child: Icon(
-                                                Icons.restaurant,
-                                                color: colorPrimario,
-                                                size: 40,
-                                              ),
-                                            ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Platillo: ${platillo['Platillo'] ?? 'Sin nombre'}',
+                                    style: TextStyle(
+                                      fontSize: 16,
+                                      fontWeight: FontWeight.bold,
+                                      color: colorTexto,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Precio: ${platillo['Precio']?.toString() ?? '0.00'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: Colors.green.shade600,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Descripción: ${platillo['Descripcion'] ?? 'Sin descripción'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colorTexto.withOpacity(0.8),
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Categoría: ${platillo['ID_Categoria']?.toString() ?? 'Sin categoría'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colorTexto,
+                                    ),
+                                  ),
+                                  const SizedBox(height: 8),
+                                  Text(
+                                    'Estado: ${platillo['ID_Estado']?.toString() ?? 'Sin estado'}',
+                                    style: TextStyle(
+                                      fontSize: 14,
+                                      color: colorTexto,
                                     ),
                                   ),
                                 ],
                               ),
                             ),
-                          );
-                        },
-                      ),
+                          ),
+                        );
+                      },
+                    ),
             ),
           ],
         ),
