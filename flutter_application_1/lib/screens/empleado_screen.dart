@@ -574,13 +574,44 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             itemCount: _menuItems.length,
             itemBuilder: (context, index) {
               final item = _menuItems[index];
-              return _buildMenuItemCard(
-                item['Platillo'],
-                item['Descripcion'],
-                item['Precio'],
-                item['ID_Estado'] == 1,
-                colorPrimario,
-                colorAccento,
+              return Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                padding: const EdgeInsets.all(16),
+                decoration: BoxDecoration(
+                  color: Colors.white,
+                  borderRadius: BorderRadius.circular(12),
+                  boxShadow: [
+                    BoxShadow(
+                      color: Colors.grey.withOpacity(0.1),
+                      spreadRadius: 1,
+                      blurRadius: 4,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Platillo: ${item['Platillo'] ?? 'Sin nombre'}',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                        color: Colors.black,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Descripción: ${item['Descripcion'] ?? 'Sin descripción'}',
+                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Precio: ${item['Precio']?.toString() ?? '0.00'}',
+                      style: TextStyle(fontSize: 14, color: Colors.green),
+                    ),
+                  ],
+                ),
               );
             },
           ),
