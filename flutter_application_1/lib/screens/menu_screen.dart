@@ -142,14 +142,6 @@ class _MenuScreenState extends State<MenuScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(
-                                    'ID: ${platillo['ID_Menu']?.toString() ?? 'Sin ID'}',
-                                    style: TextStyle(
-                                      fontSize: 14,
-                                      fontWeight: FontWeight.bold,
-                                      color: colorTexto,
-                                    ),
-                                  ),
                                   const SizedBox(height: 8),
                                   Text(
                                     'Platillo: ${platillo['Platillo'] ?? 'Sin nombre'}',
@@ -177,7 +169,7 @@ class _MenuScreenState extends State<MenuScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Categoría: ${platillo['ID_Categoria']?.toString() ?? 'Sin categoría'}',
+                                    'Estado: ${platillo['ID_Estado']?.toString() ?? 'Sin estado'}',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: colorTexto,
@@ -185,7 +177,7 @@ class _MenuScreenState extends State<MenuScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Estado: ${platillo['ID_Estado']?.toString() ?? 'Sin estado'}',
+                                    'Categoría: ${platillo['CategoriaDescripcion'] ?? 'Sin categoría'}',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: colorTexto,

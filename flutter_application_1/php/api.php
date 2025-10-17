@@ -338,7 +338,7 @@ try {
     if ($action === 'get_menu') {
         try {
             error_log('Acción detectada: get_menu');
-            $stmt = $pdo->prepare("SELECT ID_Menu, Platillo, Precio, Descripcion, ID_Categoria, ID_Estado, Imagen FROM menu ORDER BY ID_Menu");
+            $stmt = $pdo->prepare("SELECT m.ID_Menu, m.Platillo, m.Precio, m.Descripcion, m.ID_Categoria, c.Descripcion AS CategoriaDescripcion, m.ID_Estado, m.Imagen FROM menu m JOIN categoria c ON m.ID_Categoria = c.ID_Categoria ORDER BY m.ID_Menu");
             $stmt->execute();
             $menu_items = $stmt->fetchAll(PDO::FETCH_ASSOC);
             error_log('Consulta ejecutada correctamente');
