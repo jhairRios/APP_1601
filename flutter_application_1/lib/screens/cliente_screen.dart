@@ -132,36 +132,78 @@ class _ClienteScreenState extends State<ClienteScreen>
   }
 
   // ---------- Helpers para CRUD de restaurantes ----------
+  // Flag para permitir edición de restaurante. Está en false para la vista
+  // de cliente (no deben editarse datos del restaurante desde aquí).
+  final bool _allowEditarRestaurante = false;
+
   void _mostrarFormularioRestaurante({Map<String, dynamic>? restaurante}) {
+    // Si la edición no está permitida (vista cliente), salir sin mostrar nada.
+    if (!_allowEditarRestaurante) return;
     // Prellenar usando las claves normalizadas (id, nombre, direccion, telefono, correo, logo)
-    final nombreCtrl = TextEditingController(text: restaurante?['nombre'] ?? restaurante?['name'] ?? '');
-    final direccionCtrl = TextEditingController(text: restaurante?['direccion'] ?? restaurante?['description'] ?? '');
-    final telefonoCtrl = TextEditingController(text: restaurante?['telefono']?.toString() ?? '');
-    final correoCtrl = TextEditingController(text: restaurante?['correo'] ?? '');
-    final logoCtrl = TextEditingController(text: restaurante?['logo'] ?? restaurante?['image'] ?? '');
+    final nombreCtrl = TextEditingController(
+      text: restaurante?['nombre'] ?? restaurante?['name'] ?? '',
+    );
+    final direccionCtrl = TextEditingController(
+      text: restaurante?['direccion'] ?? restaurante?['description'] ?? '',
+    );
+    final telefonoCtrl = TextEditingController(
+      text: restaurante?['telefono']?.toString() ?? '',
+    );
+    final correoCtrl = TextEditingController(
+      text: restaurante?['correo'] ?? '',
+    );
+    final logoCtrl = TextEditingController(
+      text: restaurante?['logo'] ?? restaurante?['image'] ?? '',
+    );
 
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        title: Text(restaurante == null ? 'Nuevo Restaurante' : 'Editar Restaurante'),
+        title: Text(
+          restaurante == null ? 'Nuevo Restaurante' : 'Editar Restaurante',
+        ),
         content: SingleChildScrollView(
           child: Column(
             children: [
-              TextField(controller: nombreCtrl, decoration: const InputDecoration(labelText: 'Nombre')),
-              TextField(controller: direccionCtrl, decoration: const InputDecoration(labelText: 'Dirección')),
-              TextField(controller: telefonoCtrl, keyboardType: TextInputType.phone, decoration: const InputDecoration(labelText: 'Teléfono')),
-              TextField(controller: correoCtrl, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Correo')),
-              TextField(controller: logoCtrl, decoration: const InputDecoration(labelText: 'Logo (ruta o URL)')),
+              TextField(
+                controller: nombreCtrl,
+                decoration: const InputDecoration(labelText: 'Nombre'),
+              ),
+              TextField(
+                controller: direccionCtrl,
+                decoration: const InputDecoration(labelText: 'Dirección'),
+              ),
+              TextField(
+                controller: telefonoCtrl,
+                keyboardType: TextInputType.phone,
+                decoration: const InputDecoration(labelText: 'Teléfono'),
+              ),
+              TextField(
+                controller: correoCtrl,
+                keyboardType: TextInputType.emailAddress,
+                decoration: const InputDecoration(labelText: 'Correo'),
+              ),
+              TextField(
+                controller: logoCtrl,
+                decoration: const InputDecoration(
+                  labelText: 'Logo (ruta o URL)',
+                ),
+              ),
             ],
           ),
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancelar'),
+          ),
           ElevatedButton(
             onPressed: () async {
               // Enviar exactamente las claves que espera la API
               final body = {
-                'id': restaurante != null ? (restaurante['id'] ?? '').toString() : '',
+                'id': restaurante != null
+                    ? (restaurante['id'] ?? '').toString()
+                    : '',
                 'nombre': nombreCtrl.text.trim(),
                 'direccion': direccionCtrl.text.trim(),
                 'telefono': telefonoCtrl.text.trim(),
@@ -187,9 +229,13 @@ class _ClienteScreenState extends State<ClienteScreen>
     final resp = await RestauranteService.createRestaurante(body);
     if (resp['success'] == true) {
       await _cargarRestaurantes();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restaurante creado')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Restaurante creado')));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
     }
   }
 
@@ -197,9 +243,13 @@ class _ClienteScreenState extends State<ClienteScreen>
     final resp = await RestauranteService.updateRestaurante(body);
     if (resp['success'] == true) {
       await _cargarRestaurantes();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restaurante actualizado')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Restaurante actualizado')));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
     }
   }
 
@@ -210,8 +260,14 @@ class _ClienteScreenState extends State<ClienteScreen>
         title: const Text('Confirmar'),
         content: const Text('¿Eliminar este restaurante?'),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancelar')),
-          ElevatedButton(onPressed: () => Navigator.pop(context, true), child: const Text('Eliminar')),
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancelar'),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Eliminar'),
+          ),
         ],
       ),
     );
@@ -219,9 +275,13 @@ class _ClienteScreenState extends State<ClienteScreen>
     final resp = await RestauranteService.deleteRestaurante(id);
     if (resp['success'] == true) {
       await _cargarRestaurantes();
-      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Restaurante eliminado')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Restaurante eliminado')));
     } else {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
     }
   }
 
@@ -383,7 +443,9 @@ class _ClienteScreenState extends State<ClienteScreen>
               if (_restaurantes.isNotEmpty) {
                 _mostrarFormularioRestaurante(restaurante: _restaurantes[0]);
               } else {
-                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('No hay restaurante cargado')));
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('No hay restaurante cargado')),
+                );
               }
             },
             icon: const Icon(Icons.edit),
@@ -481,61 +543,18 @@ class _ClienteScreenState extends State<ClienteScreen>
     Color colorNaranja,
     Color colorVerde,
   ) {
-    // Si hay al menos un restaurante, mostrar su detalle en la parte superior
-    if (_restaurantes.isNotEmpty) {
-      final r = _restaurantes[0];
-      final logoVal = (r['Logo'] ?? r['logo'] ?? r['logo_path'] ?? '').toString();
-      Widget logoWidget;
-      if (logoVal.isEmpty) {
-        logoWidget = Icon(Icons.restaurant, color: colorPrimario, size: 48);
-      } else if (logoVal.startsWith('/') || logoVal.startsWith('http')) {
-        final hostBase = 'http://192.168.10.125'; // ajusta según tu entorno
-        final url = logoVal.startsWith('http') ? logoVal : hostBase + logoVal;
-        logoWidget = ClipRRect(
-          borderRadius: BorderRadius.circular(8),
-          child: Image.network(url, width: 96, height: 96, fit: BoxFit.cover, errorBuilder: (c, e, s) => Icon(Icons.broken_image, color: colorPrimario)),
-        );
-      } else {
-        // intentar base64
-        try {
-          final bytes = base64Decode(logoVal);
-          logoWidget = ClipRRect(borderRadius: BorderRadius.circular(8), child: Image.memory(bytes, width: 96, height: 96, fit: BoxFit.cover));
-        } catch (_) {
-          logoWidget = Icon(Icons.image, color: colorPrimario, size: 48);
-        }
-      }
-
-      return SingleChildScrollView(
-        padding: const EdgeInsets.all(20),
-        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Row(children: [
-            Container(width: 110, height: 110, decoration: BoxDecoration(borderRadius: BorderRadius.circular(12), color: Colors.white), child: Center(child: logoWidget)),
-            const SizedBox(width: 16),
-            Expanded(child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-              Text(r['nombre'] ?? '', style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: colorPrimario)),
-              const SizedBox(height: 8),
-              Text('Dirección: ${r['direccion'] ?? r['Direccion'] ?? ''}'),
-              const SizedBox(height: 4),
-              Text('Teléfono: ${r['telefono'] ?? r['Telefono'] ?? ''}'),
-              const SizedBox(height: 4),
-              Text('Correo: ${r['correo'] ?? r['Correo'] ?? ''}'),
-            ])),
-          ]),
-          const SizedBox(height: 20),
-          Row(children: [
-            ElevatedButton.icon(onPressed: () => _mostrarFormularioRestaurante(restaurante: r), icon: const Icon(Icons.edit), label: const Text('Editar')),
-            const SizedBox(width: 12),
-            ElevatedButton.icon(onPressed: () => _eliminarRestaurante(r['id'].toString()), style: ElevatedButton.styleFrom(backgroundColor: Colors.red), icon: const Icon(Icons.delete), label: const Text('Eliminar')),
-          ])
-        ]),
-      );
-    }
+    // Se omite intencionalmente la tarjeta/encabezado del restaurante para la vista
+    // de cliente. Este proyecto usa un solo restaurante y la UI del cliente
+    // debe mostrar directamente el menú; si se necesita editar el restaurante
+    // aún está disponible el botón en la AppBar.
 
     // Filtrar productos por categoría (comportamiento original si no hay restaurantes)
     final sourceItems = _menuItems;
     List<Map<String, dynamic>> filteredItems = _selectedCategory == 'Todos'
         ? sourceItems
-        : sourceItems.where((item) => item['category'] == _selectedCategory).toList();
+        : sourceItems
+              .where((item) => item['category'] == _selectedCategory)
+              .toList();
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -994,13 +1013,19 @@ class _ClienteScreenState extends State<ClienteScreen>
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     IconButton(
-                      onPressed: () => _mostrarFormularioRestaurante(restaurante: item),
+                      onPressed: () =>
+                          _mostrarFormularioRestaurante(restaurante: item),
                       icon: const Icon(Icons.edit, size: 18),
                     ),
                     const SizedBox(width: 8),
                     IconButton(
-                      onPressed: () => _eliminarRestaurante(item['id'].toString()),
-                      icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                      onPressed: () =>
+                          _eliminarRestaurante(item['id'].toString()),
+                      icon: const Icon(
+                        Icons.delete,
+                        size: 18,
+                        color: Colors.red,
+                      ),
                     ),
                   ],
                 ),
