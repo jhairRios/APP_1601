@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/flexible_image.dart';
 import 'package:flutter/services.dart'; // ✅ Para copiar al portapapeles
 import 'package:http/http.dart'
   as http; // ✅ Importamos http para hacer peticiones a la API
@@ -786,8 +787,8 @@ class _LoginScreenState extends State<LoginScreen> {
                         ],
                       ),
                       child: ClipOval(
-                        child: Image.asset(
-                          'assets/LogoPinequitas.png',
+                        child: FlexibleImage(
+                          source: 'assets/LogoPinequitas.png',
                           fit: BoxFit.cover,
                         ),
                       ),

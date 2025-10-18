@@ -1,3 +1,5 @@
+import '../widgets/flexible_image.dart';
+
 import 'package:flutter/material.dart';
 import '../services/auth_service.dart';
 
@@ -245,10 +247,10 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                           ],
                         ),
                         child: ClipOval(
-                          child: Image.asset(
-                            'assets/LogoPinequitas.png',
-                            fit: BoxFit.cover,
-                          ),
+                          child: FlexibleImage(
+                              source: 'assets/LogoPinequitas.png',
+                              fit: BoxFit.cover,
+                            ),
                         ),
                       ),
                       const SizedBox(height: 20),

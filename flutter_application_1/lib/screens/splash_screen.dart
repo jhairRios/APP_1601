@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/flexible_image.dart';
 import 'package:flutter_application_1/screens/login_screen.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -59,8 +60,8 @@ class _SplashScreenState extends State<SplashScreen>
                 ), // Gris claro
               ),
               child: ClipOval(
-                child: Image.asset(
-                  'assets/LogoPinequitas.png',
+                child: FlexibleImage(
+                  source: 'assets/LogoPinequitas.png',
                   fit: BoxFit.cover,
                 ),
               ),

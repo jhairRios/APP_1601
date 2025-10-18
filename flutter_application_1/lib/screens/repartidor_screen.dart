@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/flexible_image.dart';
 
 class RepartidorScreen extends StatefulWidget {
   const RepartidorScreen({super.key});
@@ -46,8 +47,8 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
                 ],
               ),
               child: ClipOval(
-                child: Image.asset(
-                  'assets/LogoPinequitas.png',
+                child: FlexibleImage(
+                  source: 'assets/LogoPinequitas.png',
                   fit: BoxFit.cover,
                 ),
               ),

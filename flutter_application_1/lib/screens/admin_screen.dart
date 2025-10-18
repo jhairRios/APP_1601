@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/flexible_image.dart';
 import 'empresa_screen.dart';
 import 'usuario_screen.dart';
 import 'menu_screen.dart';
@@ -47,8 +48,8 @@ class _AdminScreenState extends State<AdminScreen> {
                 ],
               ),
               child: ClipOval(
-                child: Image.asset(
-                  'assets/LogoPinequitas.png',
+                child: FlexibleImage(
+                  source: 'assets/LogoPinequitas.png',
                   fit: BoxFit.cover,
                 ),
               ),

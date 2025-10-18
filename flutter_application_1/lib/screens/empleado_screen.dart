@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../services/menu_service.dart';
+import '../widgets/flexible_image.dart';
 
 class EmpleadoScreen extends StatefulWidget {
   const EmpleadoScreen({super.key});
@@ -310,8 +311,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 ],
               ),
               child: ClipOval(
-                child: Image.asset(
-                  'assets/LogoPinequitas.png',
+                child: FlexibleImage(
+                  source: 'assets/LogoPinequitas.png',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -576,7 +577,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               final item = _menuItems[index];
               return Container(
                 margin: const EdgeInsets.only(bottom: 12),
-                padding: const EdgeInsets.all(16),
+                padding: const EdgeInsets.all(0),
                 decoration: BoxDecoration(
                   color: Colors.white,
                   borderRadius: BorderRadius.circular(12),
@@ -592,23 +593,54 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      'Platillo: ${item['Platillo'] ?? 'Sin nombre'}',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: Colors.black,
+                    // Imagen del platillo
+                    Container(
+                      height: 160,
+                      width: double.infinity,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[200],
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                      ),
+                      child: ClipRRect(
+                        borderRadius: const BorderRadius.only(
+                          topLeft: Radius.circular(12),
+                          topRight: Radius.circular(12),
+                        ),
+                        child: FlexibleImage(
+                          source: item['Imagen'] ?? item['image'],
+                          name: item['Platillo'] ?? item['name'],
+                          fit: BoxFit.cover,
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Descripción: ${item['Descripcion'] ?? 'Sin descripción'}',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Precio: ${item['Precio']?.toString() ?? '0.00'}',
-                      style: TextStyle(fontSize: 14, color: Colors.green),
+                    Padding(
+                      padding: const EdgeInsets.all(12),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            '${item['Platillo'] ?? 'Sin nombre'}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.black,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Descripción: ${item['Descripcion'] ?? 'Sin descripción'}',
+                            style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'Precio: ${item['Precio']?.toString() ?? '0.00'}',
+                            style: TextStyle(fontSize: 14, color: Colors.green),
+                          ),
+                        ],
+                      ),
                     ),
                   ],
                 ),
@@ -902,78 +934,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-  Widget _buildMenuItemCard(
-    String name,
-    String description,
-    String price,
-    bool isAvailable,
-    Color colorPrimario,
-    Color colorAccento,
-  ) {
-    return Container(
-      margin: const EdgeInsets.only(bottom: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Container(
-            width: 60,
-            height: 60,
-            decoration: BoxDecoration(
-              color: Colors.grey[200],
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(Icons.restaurant, color: Colors.grey[400]),
-          ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  style: const TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                Text(
-                  description,
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
-                ),
-                Text(
-                  price,
-                  style: TextStyle(
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
-                    color: colorAccento,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Switch(
-            value: isAvailable,
-            onChanged: (value) {
-              // Cambiar disponibilidad
-            },
-            activeColor: colorAccento,
-          ),
-        ],
-      ),
-    );
-  }
+  // Nota: en la vista de empleado, las tarjetas de platillos se generan
+  // directamente desde la lista de _menuItems, por lo que no se necesita
+  // este helper separado.
 
   Widget _buildOrderCard(
     String orderNumber,

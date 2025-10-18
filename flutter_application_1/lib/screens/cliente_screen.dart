@@ -1,6 +1,7 @@
-import 'dart:convert';
 import 'package:flutter/material.dart';
 import '../services/restaurante_service.dart';
+import '../services/menu_service.dart';
+import '../widgets/flexible_image.dart';
 
 class ClienteScreen extends StatefulWidget {
   const ClienteScreen({super.key});
@@ -34,61 +35,130 @@ class _ClienteScreenState extends State<ClienteScreen>
 
   // Mock data para productos del menú
   final List<Map<String, dynamic>> _menuItems = [
-    {
-      'id': 1,
-      'name': 'Ensalada César',
-      'description': 'Lechuga, pollo, crutones, queso parmesano',
-      'price': 45.00,
-      'category': 'Entradas',
-      'image': 'assets/LogoPinequitas.png',
-      'available': true,
-    },
-    {
-      'id': 2,
-      'name': 'Hamburguesa Clásica',
-      'description': 'Carne, queso, lechuga, tomate, papas fritas',
-      'price': 85.00,
-      'category': 'Platos Fuertes',
-      'image': 'assets/LogoPinequitas.png',
-      'available': true,
-    },
-    {
-      'id': 3,
-      'name': 'Coca Cola',
-      'description': 'Refresco de cola 355ml',
-      'price': 25.00,
-      'category': 'Bebidas',
-      'image': 'assets/LogoPinequitas.png',
-      'available': true,
-    },
-    {
-      'id': 4,
-      'name': 'Tiramisú',
-      'description': 'Postre italiano con café y mascarpone',
-      'price': 55.00,
-      'category': 'Postres',
-      'image': 'assets/LogoPinequitas.png',
-      'available': true,
-    },
-    {
-      'id': 5,
-      'name': 'Sopa de Tortilla',
-      'description': 'Sopa tradicional con tortilla frita y aguacate',
-      'price': 38.00,
-      'category': 'Entradas',
-      'image': 'assets/LogoPinequitas.png',
-      'available': true,
-    },
-    {
-      'id': 6,
-      'name': 'Tacos al Pastor',
-      'description': 'Orden de 4 tacos con piña y salsa',
-      'price': 75.00,
-      'category': 'Platos Fuertes',
-      'image': 'assets/LogoPinequitas.png',
-      'available': true,
-    },
+
   ];
+
+  // Cargar items del menú desde la API
+  Future<void> _cargarMenuItems() async {
+    try {
+      final items = await MenuService.getMenuItems();
+      // items expected from the API: list of maps with DB fields like
+      // ID_Menu, Platillo, Precio, Descripcion, ID_Categoria, ID_Estado, Imagen
+      final mapped = items.map<Map<String, dynamic>>((raw) {
+        try {
+          final id = raw['ID_Menu'] ?? raw['id'] ?? raw['ID'] ?? '';
+          final platillo = raw['Platillo'] ?? raw['platillo'] ?? raw['name'] ?? '';
+          final descripcion = raw['Descripcion'] ?? raw['descripcion'] ?? raw['description'] ?? '';
+          final precio = raw['Precio'] ?? raw['precio'] ?? raw['price'] ?? 0;
+          final imagen = raw['Imagen'] ?? raw['imagen'] ?? raw['image'] ?? '';
+          final categoria = raw['ID_Categoria'] ?? raw['IDcategoria'] ?? raw['category'] ?? 'Otros';
+          final estado = raw['ID_Estado'] ?? raw['IDestado'] ?? raw['estado'] ?? 1;
+
+          final mappedItem = {
+            'id': id.toString(),
+            'name': platillo.toString(),
+            'description': descripcion.toString(),
+            'price': (precio is num) ? precio.toDouble() : double.tryParse(precio.toString()) ?? 0.0,
+          // Store only the normalized name (without extension); FlexibleImage will build the asset path.
+          'Imagen': (imagen == null || imagen.toString().trim().isEmpty)
+              ? ''
+              : _normalizeImageFilename(imagen.toString()),
+            'category': categoria is int ? _categoryFromId(categoria) : categoria.toString(),
+            'available': estado == 1 || estado == '1',
+          };
+          // debug log
+          assert(() {
+            // ignore: avoid_print
+            print('[MenuLoad] mapped item id=${mappedItem['id']} Imagen=${mappedItem['Imagen']}');
+            return true;
+          }());
+          return mappedItem;
+        } catch (e) {
+          final fallback = {
+            'id': '',
+            'name': raw.toString(),
+            'description': '',
+            'price': 0.0,
+            'Imagen': '',
+            'category': 'Otros',
+            'available': true,
+          };
+          assert(() {
+            // ignore: avoid_print
+            print('[MenuLoad] mapping failed for raw=$raw error=$e');
+            return true;
+          }());
+          return fallback;
+        }
+      }).toList();
+
+      setState(() {
+        _menuItems.clear();
+        _menuItems.addAll(mapped);
+      });
+    } catch (e) {
+      // no bloquear UI; dejar lista vacía
+      // print('Error cargando menu: $e');
+    }
+  }
+
+  String _categoryFromId(dynamic id) {
+    try {
+      final i = int.tryParse(id.toString()) ?? 0;
+      switch (i) {
+        case 1:
+          return 'Entradas';
+        case 2:
+          return 'Platos Fuertes';
+        case 3:
+          return 'Postres';
+        case 4:
+          return 'Bebidas';
+        default:
+          return 'Otros';
+      }
+    } catch (e) {
+      return 'Otros';
+    }
+  }
+
+  // Normaliza el campo Imagen devolviendo solo el filename esperable en assets/Menu
+  // Ejemplos:
+  // 'assets/Menu/Coca%2520Colas.png' -> 'Coca_Cola.png'
+  // 'Coca Cola' -> 'Coca_Cola.png'
+  String _normalizeImageFilename(String raw) {
+    try {
+      var s = raw.trim();
+      if (s.isEmpty) return '';
+      // Decodificar percent-encoding
+      s = Uri.decodeFull(s);
+      // Si trae una ruta, quedarnos con el último segmento
+      if (s.contains('/')) s = s.split('/').last;
+      // Reemplazar %20 y espacios por guión bajo
+      s = s.replaceAll('%20', '_').replaceAll(RegExp(r"\s+"), '_');
+      // Reemplazar múltiples guiones bajos por uno
+      s = s.replaceAll(RegExp(r'_+'), '_');
+      // Quitar caracteres no deseados excepto alfanum y guión bajo y punto
+      s = s.replaceAll(RegExp(r"[^A-Za-z0-9_\.]+"), '');
+      if (s.isEmpty) return '';
+      // Asegurar que tenga extensión
+      if (!s.contains('.')) s = '$s.png';
+      final dot = s.lastIndexOf('.');
+      var name = s.substring(0, dot);
+      var ext = s.substring(dot + 1).toLowerCase();
+      if (!(ext == 'png' || ext == 'jpg' || ext == 'jpeg')) ext = 'png';
+      // Normalizar a TitleCase por palabra y unir con underscore (para coincidir con assets)
+      final parts = name.split(RegExp(r'[_\s]+'));
+      final titleParts = parts.map((p) {
+        if (p.isEmpty) return '';
+        return p[0].toUpperCase() + (p.length > 1 ? p.substring(1).toLowerCase() : '');
+      }).where((p) => p.isNotEmpty).toList();
+      final normalized = titleParts.join('_');
+      return '$normalized.$ext';
+    } catch (e) {
+      return raw;
+    }
+  }
 
   // Lista cargada desde la API
   List<Map<String, dynamic>> _restaurantes = [];
@@ -129,6 +199,8 @@ class _ClienteScreenState extends State<ClienteScreen>
     _slideController.forward();
     // Cargar restaurantes desde la API
     _cargarRestaurantes();
+    // Cargar menú desde la API
+    _cargarMenuItems();
   }
 
   // ---------- Helpers para CRUD de restaurantes ----------
@@ -364,8 +436,8 @@ class _ClienteScreenState extends State<ClienteScreen>
                 ],
               ),
               child: ClipOval(
-                child: Image.asset(
-                  'assets/LogoPinequitas.png',
+                child: FlexibleImage(
+                  source: 'assets/LogoPinequitas.png',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -969,16 +1041,10 @@ class _ClienteScreenState extends State<ClienteScreen>
                       topLeft: Radius.circular(12),
                       topRight: Radius.circular(12),
                     ),
-                    child: Image.asset(
-                      item['image'],
+                    child: FlexibleImage(
+                      source: item['image'] ?? item['Imagen'],
+                      name: item['name'],
                       fit: BoxFit.cover,
-                      errorBuilder: (context, error, stackTrace) {
-                        return Icon(
-                          Icons.restaurant,
-                          size: 40,
-                          color: Colors.grey[400],
-                        );
-                      },
                     ),
                   ),
                 ),
@@ -1096,18 +1162,12 @@ class _ClienteScreenState extends State<ClienteScreen>
                     ),
                   ],
                 ),
-                child: ClipRRect(
+                  child: ClipRRect(
                   borderRadius: BorderRadius.circular(16),
-                  child: Image.asset(
-                    item['image'],
+                  child: FlexibleImage(
+                    source: item['image'] ?? item['Imagen'],
+                    name: item['name'],
                     fit: BoxFit.cover,
-                    errorBuilder: (context, error, stackTrace) {
-                      return Icon(
-                        Icons.restaurant,
-                        size: 80,
-                        color: Colors.grey[400],
-                      );
-                    },
                   ),
                 ),
               ),
@@ -1328,14 +1388,14 @@ class _ClienteScreenState extends State<ClienteScreen>
               color: Colors.grey[200],
               borderRadius: BorderRadius.circular(8),
             ),
-            child: ClipRRect(
+              child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
-              child: Image.asset(
-                item['image'],
+              child: FlexibleImage(
+                source: item['image'] ?? item['Imagen'],
+                name: item['name'],
+                width: 60,
+                height: 60,
                 fit: BoxFit.cover,
-                errorBuilder: (context, error, stackTrace) {
-                  return Icon(Icons.restaurant, color: Colors.grey[400]);
-                },
               ),
             ),
           ),
