@@ -45,6 +45,19 @@ try {
 
     $action = $input_data['action'] ?? null;
 
+    // ----------------------- CATEGORIAS -----------------------
+    if ($action === 'get_categorias') {
+        try {
+            $stmt = $pdo->prepare("SELECT ID_Categoria, Descripcion FROM categoria ORDER BY Descripcion");
+            $stmt->execute();
+            $categorias = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'categorias' => $categorias]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Error obteniendo categorias: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     // ----------------------- ROLES -----------------------
     if ($action === 'get_roles') {
         try {
