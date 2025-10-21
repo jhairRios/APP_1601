@@ -1,22 +1,73 @@
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
+import 'dart:convert';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 
 class EmpleadoScreen extends StatefulWidget {
-  const EmpleadoScreen({super.key});
+  const EmpleadoScreen({Key? key}) : super(key: key);
 
   @override
   State<EmpleadoScreen> createState() => _EmpleadoScreenState();
 }
 
 class _EmpleadoScreenState extends State<EmpleadoScreen> {
+  // Devuelve el estado textual del platillo según el ID_Estado
+  String _estadoPlatillo(dynamic estado) {
+    if (estado == 2 || estado == 3) {
+      return 'No Disponible';
+    }
+    return 'Disponible';
+  }
+
+  // Devuelve el estado textual del platillo según el ID_Estado
+  // Devuelve el estado textual del platillo según el ID_Estado
+  // Devuelve el estado textual del platillo según el ID_Estado
+  // Devuelve el estado textual del platillo según el ID_Estado
+  // Devuelve el estado textual del platillo según el ID_Estado
+  List<Map<String, dynamic>> categorias = <Map<String, dynamic>>[];
+  int? categoriaSeleccionada;
+  int? estadoSeleccionado;
   int _selectedIndex = 0;
   List<dynamic> _menuItems = [];
 
   @override
   void initState() {
     super.initState();
+    _fetchCategorias();
     _fetchMenuItems();
+  }
+
+  Future<void> _fetchCategorias() async {
+    try {
+      final response = await http.post(
+        Uri.parse(
+          'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php',
+        ),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({'action': 'get_categorias'}),
+      );
+      final data = jsonDecode(response.body);
+      print('API categorias response: ${response.body}');
+      List<Map<String, dynamic>> nuevaLista = <Map<String, dynamic>>[];
+      if (data is Map<String, dynamic> && data['success'] == true) {
+        final cats = data['categorias'];
+        if (cats is List) {
+          nuevaLista = cats
+              .where((e) => e != null && e is Map<String, dynamic>)
+              .map((e) => Map<String, dynamic>.from(e as Map))
+              .toList();
+        }
+      }
+      setState(() {
+        categorias = nuevaLista;
+      });
+    } catch (e) {
+      print('Error en _fetchCategorias: $e');
+      setState(() {
+        categorias = <Map<String, dynamic>>[];
+      });
+    }
   }
 
   Future<void> _fetchMenuItems() async {
@@ -36,8 +87,6 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     final TextEditingController nombreController = TextEditingController();
     final TextEditingController precioController = TextEditingController();
     final TextEditingController descripcionController = TextEditingController();
-    int? categoriaSeleccionada;
-    int? estadoSeleccionado;
 
     showModalBottomSheet(
       context: context,
@@ -210,15 +259,29 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                           ),
                         ),
                       ),
-                      items: const [
-                        DropdownMenuItem(value: 1, child: Text('Entradas')),
-                        DropdownMenuItem(
-                          value: 2,
-                          child: Text('Platos Fuertes'),
-                        ),
-                        DropdownMenuItem(value: 3, child: Text('Postres')),
-                        DropdownMenuItem(value: 4, child: Text('Bebidas')),
-                      ],
+                      items: categorias.isNotEmpty
+                          ? categorias
+                                .where(
+                                  (cat) =>
+                                      cat['ID_Categoria'] != null &&
+                                      cat['Descripcion'] != null,
+                                )
+                                .map((cat) {
+                                  final id = cat['ID_Categoria'];
+                                  return DropdownMenuItem<int>(
+                                    value: id is int
+                                        ? id
+                                        : int.tryParse(id.toString()),
+                                    child: Text(cat['Descripcion'].toString()),
+                                  );
+                                })
+                                .toList()
+                          : [
+                              const DropdownMenuItem<int>(
+                                value: null,
+                                child: Text('No hay categorías'),
+                              ),
+                            ],
                       onChanged: (value) {
                         setState(() {
                           categoriaSeleccionada = value;
@@ -254,6 +317,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         DropdownMenuItem(value: 1, child: Text('Disponible')),
                         DropdownMenuItem(
                           value: 2,
+                          child: Text('No Disponible'),
+                        ),
+                        DropdownMenuItem(
+                          value: 3,
                           child: Text('No Disponible'),
                         ),
                       ],
@@ -695,7 +762,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                   ),
                 ),
 
-                // Información (nombre + precio) con altura limitada
+                // Información (nombre + precio) with limited height
                 Container(
                   height: infoH,
                   padding: const EdgeInsets.symmetric(
@@ -722,6 +789,18 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         style: const TextStyle(
                           fontSize: 13,
                           color: Colors.green,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        _estadoPlatillo(item['ID_Estado']),
+                        style: TextStyle(
+                          fontSize: 12,
+                          color:
+                              (item['ID_Estado'] == 2 || item['ID_Estado'] == 3)
+                              ? Colors.red
+                              : Colors.green,
+                          fontWeight: FontWeight.w500,
                         ),
                       ),
                     ],
@@ -1164,8 +1243,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             ),
           ),
         ],
-      ),//hola
-    );//drgdrgdrsefsef
+      ), //hola
+    ); //drgdrgdrsefsef
   }
 
   Widget _buildReadyOrderCard(

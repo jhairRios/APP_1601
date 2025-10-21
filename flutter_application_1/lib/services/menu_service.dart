@@ -10,6 +10,7 @@ class MenuService {
       final response = await http.get(
         Uri.parse('$_baseUrl?action=get_categorias'),
       );
+      print('Respuesta cruda getCategorias: \\n${response.body}');
       if (response.statusCode == 200) {
         final decodedResponse = json.decode(response.body);
         if (decodedResponse is Map<String, dynamic> &&
@@ -32,19 +33,17 @@ class MenuService {
   static Future<List<dynamic>> getMenuItems() async {
     try {
       final response = await http.get(Uri.parse('$_baseUrl?action=get_menu'));
+      print('Respuesta cruda getMenuItems: ${response.body}');
       if (response.statusCode == 200) {
         final decodedResponse = json.decode(response.body);
         if (decodedResponse is Map<String, dynamic> &&
             decodedResponse['menu'] is List) {
-          return decodedResponse['menu'];
-        } else {
-          throw Exception('Formato de respuesta inesperado');
+          return List<Map<String, dynamic>>.from(
+            decodedResponse['menu'].where((e) => e is Map<String, dynamic>),
+          );
         }
-      } else {
-        throw Exception(
-          'Error al obtener los datos del menú: ${response.statusCode}',
-        );
       }
+      return [];
     } catch (e) {
       print('Error en getMenuItems: $e');
       return [];
