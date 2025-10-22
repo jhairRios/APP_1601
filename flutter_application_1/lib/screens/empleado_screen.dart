@@ -13,18 +13,17 @@ class EmpleadoScreen extends StatefulWidget {
 
 class _EmpleadoScreenState extends State<EmpleadoScreen> {
   // Devuelve el estado textual del platillo según el ID_Estado
+  /// Devuelve el estado textual del platillo según el ID_Estado de la BD
+  /// 2 = Disponible, 1 = No Disponible
   String _estadoPlatillo(dynamic estado) {
-    if (estado == 2 || estado == 3) {
-      return 'No Disponible';
+    if (estado == 2) {
+      return 'Disponible';
     }
-    return 'Disponible';
+    return 'No Disponible';
   }
 
   // Devuelve el estado textual del platillo según el ID_Estado
-  // Devuelve el estado textual del platillo según el ID_Estado
-  // Devuelve el estado textual del platillo según el ID_Estado
-  // Devuelve el estado textual del platillo según el ID_Estado
-  // Devuelve el estado textual del platillo según el ID_Estado
+
   List<Map<String, dynamic>> categorias = <Map<String, dynamic>>[];
   int? categoriaSeleccionada;
   int? estadoSeleccionado;
@@ -314,15 +313,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         ),
                       ),
                       items: const [
-                        DropdownMenuItem(value: 1, child: Text('Disponible')),
                         DropdownMenuItem(
-                          value: 2,
+                          value: 1,
                           child: Text('No Disponible'),
                         ),
-                        DropdownMenuItem(
-                          value: 3,
-                          child: Text('No Disponible'),
-                        ),
+                        DropdownMenuItem(value: 2, child: Text('Disponible')),
                       ],
                       onChanged: (value) {
                         setState(() {
@@ -796,10 +791,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         _estadoPlatillo(item['ID_Estado']),
                         style: TextStyle(
                           fontSize: 12,
-                          color:
-                              (item['ID_Estado'] == 2 || item['ID_Estado'] == 3)
-                              ? Colors.red
-                              : Colors.green,
+                          color: item['ID_Estado'] == 2
+                              ? Colors.green
+                              : Colors.red,
                           fontWeight: FontWeight.w500,
                         ),
                       ),

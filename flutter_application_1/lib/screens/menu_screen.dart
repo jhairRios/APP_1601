@@ -169,7 +169,7 @@ class _MenuScreenState extends State<MenuScreen> {
                                   ),
                                   const SizedBox(height: 8),
                                   Text(
-                                    'Estado: ${platillo['ID_Estado'] == 2 ? 'Disponible' : 'No disponible'}',
+                                    'Estado: ${platillo['ID_Estado'] == 2 ? 'Disponible' : 'No Disponible'}',
                                     style: TextStyle(
                                       fontSize: 14,
                                       color: colorTexto,
