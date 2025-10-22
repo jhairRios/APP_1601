@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
+import 'dart:typed_data';
+import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
@@ -86,6 +88,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     final TextEditingController nombreController = TextEditingController();
     final TextEditingController precioController = TextEditingController();
     final TextEditingController descripcionController = TextEditingController();
+    // Controller para la imagen (URL o ruta)
+    final TextEditingController imagenController = TextEditingController();
+    // Para seleccionar imagen desde dispositivo
+    Uint8List? imagenBytes;
+    String? imagenFilename;
+    final ImagePicker _picker = ImagePicker();
 
     showModalBottomSheet(
       context: context,
@@ -172,6 +180,112 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
+                    // Botón para seleccionar imagen desde el dispositivo
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final XFile? picked = await _picker.pickImage(
+                                source: ImageSource.gallery,
+                                imageQuality: 85,
+                              );
+                              if (picked != null) {
+                                imagenBytes = await picked.readAsBytes();
+                                imagenFilename = picked.name;
+                                // Limpiar campo URL si había
+                                imagenController.text = '';
+                                // actualizar UI
+                                setState(() {});
+                              }
+                            },
+                            icon: const Icon(Icons.photo_library),
+                            label: const Text('Seleccionar imagen'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _modalPrimary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        // También permitir pegar URL manualmente si el usuario quiere
+                        IconButton(
+                          onPressed: () {
+                            // foco al campo URL en caso de querer pegar
+                            // No hacemos más aquí; el campo URL aún está presente más abajo
+                          },
+                          icon: const Icon(Icons.link),
+                          color: _modalPrimary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    // Campo para la imagen (URL o ruta) - opcional
+                    TextField(
+                      controller: imagenController,
+                      style: TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        hintText:
+                            'Imagen (URL, opcional si eliges archivo local)',
+                        prefixIcon: Icon(Icons.image, color: _modalPrimary),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      onChanged: (v) {
+                        // rebuild para mostrar preview si pega URL
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    // Preview de la imagen: preferir bytes seleccionados, si no usar URL
+                    if (imagenBytes != null)
+                      Container(
+                        height: 140,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(imagenBytes!, fit: BoxFit.cover),
+                        ),
+                      )
+                    else if (imagenController.text.trim().isNotEmpty)
+                      Container(
+                        height: 140,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: FlexibleImage(
+                            source: imagenController.text,
+                            name: nombreController.text,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
                     TextField(
                       controller: precioController,
                       keyboardType: const TextInputType.numberWithOptions(
@@ -329,13 +443,31 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                     ElevatedButton(
                       onPressed: () async {
                         try {
-                          final success = await MenuService.addMenuItem({
-                            'Platillo': nombreController.text,
-                            'Precio': precioController.text,
-                            'Descripcion': descripcionController.text,
-                            'ID_Categoria': categoriaSeleccionada,
-                            'ID_Estado': estadoSeleccionado,
-                          });
+                          bool success = false;
+                          if (imagenBytes != null) {
+                            // enviar multipart con bytes
+                            success = await MenuService.addMenuItemWithImage(
+                              {
+                                'Platillo': nombreController.text,
+                                'Precio': precioController.text,
+                                'Descripcion': descripcionController.text,
+                                'ID_Categoria': categoriaSeleccionada,
+                                'ID_Estado': estadoSeleccionado,
+                              },
+                              imageBytes: imagenBytes,
+                              imageFilename: imagenFilename ?? 'imagen.jpg',
+                            );
+                          } else {
+                            // enviar JSON, si el usuario pegó una URL se incluirá
+                            success = await MenuService.addMenuItem({
+                              'Platillo': nombreController.text,
+                              'Precio': precioController.text,
+                              'Descripcion': descripcionController.text,
+                              'Imagen': imagenController.text,
+                              'ID_Categoria': categoriaSeleccionada,
+                              'ID_Estado': estadoSeleccionado,
+                            });
+                          }
                           if (success) {
                             Navigator.of(context).pop();
                             _fetchMenuItems();
@@ -347,12 +479,16 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         }
                       },
                       style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.blueAccent,
+                        backgroundColor: _modalPrimary,
                         foregroundColor: Colors.white,
                         shape: RoundedRectangleBorder(
                           borderRadius: BorderRadius.circular(12),
                         ),
-                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16,
+                          horizontal: 20,
+                        ),
+                        elevation: 4,
                       ),
                       child: const Text(
                         'Guardar',

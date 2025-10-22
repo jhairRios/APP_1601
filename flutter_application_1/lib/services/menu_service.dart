@@ -1,6 +1,8 @@
 import 'package:http/http.dart' as http;
 import 'dart:convert';
+import 'dart:typed_data';
 import 'api_config.dart';
+import 'package:http_parser/http_parser.dart';
 
 class MenuService {
   static const String _baseUrl = API_BASE_URL;
@@ -65,6 +67,47 @@ class MenuService {
       }
     } catch (e) {
       print('Error en addMenuItem: $e');
+      return false;
+    }
+  }
+
+  /// Añade un platillo con posibilidad de enviar imagen como bytes (multipart).
+  /// Si [imageBytes] es null, se usa el método JSON simple.
+  static Future<bool> addMenuItemWithImage(
+    Map<String, dynamic> menuItem, {
+    Uint8List? imageBytes,
+    String imageFilename = 'imagen.jpg',
+  }) async {
+    try {
+      if (imageBytes == null) {
+        return await addMenuItem(menuItem);
+      }
+      final uri = Uri.parse('$_baseUrl?action=add_menu_item');
+      final request = http.MultipartRequest('POST', uri);
+      // Agregar campos
+      menuItem.forEach((key, value) {
+        if (value != null) request.fields[key] = value.toString();
+      });
+      // Agregar archivo
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'imagen_file',
+          imageBytes,
+          filename: imageFilename,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
+      final streamed = await request.send();
+      final respStr = await streamed.stream.bytesToString();
+      if (streamed.statusCode == 200) {
+        return true;
+      }
+      print(
+        'Error multipart addMenuItemWithImage: ${streamed.statusCode} -> $respStr',
+      );
+      return false;
+    } catch (e) {
+      print('Error en addMenuItemWithImage: $e');
       return false;
     }
   }
