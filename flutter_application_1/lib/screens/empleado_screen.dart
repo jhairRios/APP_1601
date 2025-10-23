@@ -684,11 +684,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                                 'ID_Estado': estadoActual,
                               };
 
-                              // Solo incluir Imagen si cambió
-                              if (imagenController.text.trim() !=
-                                  platillo['Imagen']) {
-                                datosActualizados['Imagen'] =
-                                    imagenController.text.trim();
+                              // Solo incluir Imagen si cambió y no está vacía
+                              final nuevaImagen =
+                                  imagenController.text.trim();
+                              if (nuevaImagen.isNotEmpty &&
+                                  nuevaImagen != platillo['Imagen']) {
+                                datosActualizados['Imagen'] = nuevaImagen;
                               }
 
                               print('📤 Datos a enviar: $datosActualizados');
