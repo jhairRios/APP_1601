@@ -54,19 +54,39 @@ class MenuService {
 
   static Future<bool> addMenuItem(Map<String, dynamic> menuItem) async {
     try {
+      print('=== addMenuItem ===');
+      print('Enviando datos: $menuItem');
+      
       final response = await http.post(
-        Uri.parse('$_baseUrl?menu'),
+        Uri.parse('$_baseUrl?action=add_menu_item'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode(menuItem),
       );
+      
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      
       if (response.statusCode == 200) {
-        return true;
+        try {
+          final decoded = json.decode(response.body);
+          print('Decoded response: $decoded');
+          
+          if (decoded is Map && decoded['success'] == true) {
+            print('✓ Platillo agregado exitosamente');
+            return true;
+          }
+          print('✗ Error en respuesta: $decoded');
+          return false;
+        } catch (e) {
+          print('✗ Error al decodificar JSON: $e');
+          return false;
+        }
       } else {
-        print('Error al agregar el platillo: ${response.statusCode}');
+        print('✗ Error HTTP: ${response.statusCode}');
         return false;
       }
     } catch (e) {
-      print('Error en addMenuItem: $e');
+      print('✗ Exception en addMenuItem: $e');
       return false;
     }
   }
@@ -99,8 +119,19 @@ class MenuService {
       );
       final streamed = await request.send();
       final respStr = await streamed.stream.bytesToString();
+      print('Response addMenuItemWithImage: ${streamed.statusCode} - $respStr');
       if (streamed.statusCode == 200) {
-        return true;
+        try {
+          final decoded = json.decode(respStr);
+          if (decoded is Map && decoded['success'] == true) {
+            return true;
+          }
+          print('Error en respuesta: $decoded');
+          return false;
+        } catch (e) {
+          print('Error decodificando respuesta: $e');
+          return false;
+        }
       }
       print(
         'Error multipart addMenuItemWithImage: ${streamed.statusCode} -> $respStr',
@@ -108,6 +139,138 @@ class MenuService {
       return false;
     } catch (e) {
       print('Error en addMenuItemWithImage: $e');
+      return false;
+    }
+  }
+
+  /// Actualiza un platillo existente (sin imagen).
+  static Future<bool> updateMenuItem(Map<String, dynamic> menuItem) async {
+    try {
+      print('=== updateMenuItem ===');
+      print('Enviando datos: $menuItem');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl?action=update_menu_item'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(menuItem),
+      );
+      
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        try {
+          final decoded = json.decode(response.body);
+          print('Decoded response: $decoded');
+          
+          if (decoded is Map && decoded['success'] == true) {
+            print('✓ Platillo actualizado exitosamente');
+            return true;
+          }
+          print('✗ Error en respuesta: $decoded');
+          return false;
+        } catch (e) {
+          print('✗ Error al decodificar JSON: $e');
+          return false;
+        }
+      } else {
+        print('✗ Error HTTP: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('✗ Exception en updateMenuItem: $e');
+      return false;
+    }
+  }
+
+  /// Actualiza un platillo con posibilidad de enviar imagen como bytes (multipart).
+  /// Si [imageBytes] es null, se usa el método JSON simple.
+  static Future<bool> updateMenuItemWithImage(
+    Map<String, dynamic> menuItem, {
+    Uint8List? imageBytes,
+    String imageFilename = 'imagen.jpg',
+  }) async {
+    try {
+      if (imageBytes == null) {
+        return await updateMenuItem(menuItem);
+      }
+      final uri = Uri.parse('$_baseUrl?action=update_menu_item');
+      final request = http.MultipartRequest('POST', uri);
+      // Agregar campos
+      menuItem.forEach((key, value) {
+        if (value != null) request.fields[key] = value.toString();
+      });
+      // Agregar archivo
+      request.files.add(
+        http.MultipartFile.fromBytes(
+          'imagen_file',
+          imageBytes,
+          filename: imageFilename,
+          contentType: MediaType('image', 'jpeg'),
+        ),
+      );
+      final streamed = await request.send();
+      final respStr = await streamed.stream.bytesToString();
+      print('Response updateMenuItemWithImage: ${streamed.statusCode} - $respStr');
+      if (streamed.statusCode == 200) {
+        try {
+          final decoded = json.decode(respStr);
+          if (decoded is Map && decoded['success'] == true) {
+            return true;
+          }
+          print('Error en respuesta: $decoded');
+          return false;
+        } catch (e) {
+          print('Error decodificando respuesta: $e');
+          return false;
+        }
+      }
+      print(
+        'Error multipart updateMenuItemWithImage: ${streamed.statusCode} -> $respStr',
+      );
+      return false;
+    } catch (e) {
+      print('Error en updateMenuItemWithImage: $e');
+      return false;
+    }
+  }
+
+  /// Elimina un platillo por su ID.
+  static Future<bool> deleteMenuItem(int idMenu) async {
+    try {
+      print('=== deleteMenuItem ===');
+      print('ID a eliminar: $idMenu');
+      
+      final response = await http.post(
+        Uri.parse('$_baseUrl?action=delete_menu_item'),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'ID_Menu': idMenu}),
+      );
+      
+      print('Status Code: ${response.statusCode}');
+      print('Response Body: ${response.body}');
+      
+      if (response.statusCode == 200) {
+        try {
+          final decoded = json.decode(response.body);
+          print('Decoded response: $decoded');
+          
+          if (decoded is Map && decoded['success'] == true) {
+            print('✓ Platillo eliminado exitosamente');
+            return true;
+          }
+          print('✗ Error en respuesta: $decoded');
+          return false;
+        } catch (e) {
+          print('✗ Error al decodificar JSON: $e');
+          return false;
+        }
+      } else {
+        print('✗ Error HTTP: ${response.statusCode}');
+        return false;
+      }
+    } catch (e) {
+      print('✗ Exception en deleteMenuItem: $e');
       return false;
     }
   }

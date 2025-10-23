@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:http/http.dart' as http;
 import 'dart:typed_data';
 import 'package:image_picker/image_picker.dart';
-import 'dart:convert';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 
@@ -41,28 +39,17 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
   Future<void> _fetchCategorias() async {
     try {
-      final response = await http.post(
-        Uri.parse(
-          'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php',
-        ),
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({'action': 'get_categorias'}),
-      );
-      final data = jsonDecode(response.body);
-      print('API categorias response: ${response.body}');
-      List<Map<String, dynamic>> nuevaLista = <Map<String, dynamic>>[];
-      if (data is Map<String, dynamic> && data['success'] == true) {
-        final cats = data['categorias'];
-        if (cats is List) {
-          nuevaLista = cats
-              .where((e) => e != null && e is Map<String, dynamic>)
-              .map((e) => Map<String, dynamic>.from(e as Map))
-              .toList();
-        }
-      }
+      final lista = await MenuService.getCategorias();
       setState(() {
-        categorias = nuevaLista;
+        categorias = List<Map<String, dynamic>>.from(lista);
       });
+      // Si no hay selección previa, usar la primera categoría disponible
+      if (categoriaSeleccionada == null && categorias.isNotEmpty) {
+        final firstId = categorias.first['ID_Categoria'];
+        categoriaSeleccionada = firstId is int
+            ? firstId
+            : int.tryParse(firstId.toString());
+      }
     } catch (e) {
       print('Error en _fetchCategorias: $e');
       setState(() {
@@ -82,6 +69,793 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     }
   }
 
+  // ✅ MOSTRAR OPCIONES AL TOCAR UN PLATILLO
+  void _mostrarOpcionesPlatillo(
+    BuildContext context,
+    Map<String, dynamic> platillo,
+    Color colorPrimario,
+    Color colorAccento,
+  ) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return Container(
+          decoration: BoxDecoration(
+            color: Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+            ),
+          ),
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              // Handle
+              Container(
+                width: 48,
+                height: 4,
+                margin: const EdgeInsets.only(bottom: 16),
+                decoration: BoxDecoration(
+                  color: Colors.grey[300],
+                  borderRadius: BorderRadius.circular(4),
+                ),
+              ),
+              // Título
+              Text(
+                platillo['Platillo'] ?? 'Platillo',
+                style: TextStyle(
+                  fontSize: 20,
+                  fontWeight: FontWeight.bold,
+                  color: colorPrimario,
+                ),
+              ),
+              const SizedBox(height: 20),
+              // Opciones
+              ListTile(
+                leading: Icon(Icons.visibility, color: Colors.blue),
+                title: const Text('Ver Detalles'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _mostrarDetallesPlatillo(context, platillo, colorPrimario);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.edit, color: Colors.orange),
+                title: const Text('Editar Platillo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _mostrarFormularioEditarPlatillo(
+                    context,
+                    platillo,
+                    colorPrimario,
+                    colorAccento,
+                  );
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete, color: Colors.red),
+                title: const Text('Eliminar Platillo'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _confirmarEliminarPlatillo(context, platillo, colorPrimario);
+                },
+              ),
+              const SizedBox(height: 10),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ MOSTRAR DETALLES DEL PLATILLO
+  void _mostrarDetallesPlatillo(
+    BuildContext context,
+    Map<String, dynamic> platillo,
+    Color colorPrimario,
+  ) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return Dialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(20),
+          ),
+          child: Container(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Imagen
+                if (platillo['Imagen'] != null &&
+                    platillo['Imagen'].toString().isNotEmpty)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: FlexibleImage(
+                      source: platillo['Imagen'],
+                      name: platillo['Platillo'] ?? '',
+                      fit: BoxFit.cover,
+                      height: 200,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                // Nombre
+                Text(
+                  platillo['Platillo'] ?? 'Sin nombre',
+                  style: TextStyle(
+                    fontSize: 22,
+                    fontWeight: FontWeight.bold,
+                    color: colorPrimario,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Precio
+                Text(
+                  '\$${platillo['Precio'] ?? '0'}',
+                  style: const TextStyle(
+                    fontSize: 20,
+                    color: Colors.green,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Descripción
+                Text(
+                  platillo['Descripcion'] ?? 'Sin descripción',
+                  style: TextStyle(
+                    fontSize: 14,
+                    color: Colors.grey[700],
+                  ),
+                ),
+                const SizedBox(height: 12),
+                // Estado
+                Row(
+                  children: [
+                    Text(
+                      'Estado: ',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        color: colorPrimario,
+                      ),
+                    ),
+                    Text(
+                      _estadoPlatillo(platillo['ID_Estado']),
+                      style: TextStyle(
+                        color: platillo['ID_Estado'] == 2
+                            ? Colors.green
+                            : Colors.red,
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                // Botón cerrar
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: colorPrimario,
+                      foregroundColor: Colors.white,
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                    ),
+                    child: const Text('Cerrar'),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  // ✅ FORMULARIO PARA EDITAR PLATILLO
+  void _mostrarFormularioEditarPlatillo(
+    BuildContext context,
+    Map<String, dynamic> platillo,
+    Color colorPrimario,
+    Color colorAccento,
+  ) {
+    final TextEditingController nombreController =
+        TextEditingController(text: platillo['Platillo']?.toString() ?? '');
+    final TextEditingController precioController =
+        TextEditingController(text: platillo['Precio']?.toString() ?? '');
+    final TextEditingController descripcionController =
+        TextEditingController(text: platillo['Descripcion']?.toString() ?? '');
+    final TextEditingController imagenController =
+        TextEditingController(text: platillo['Imagen']?.toString() ?? '');
+
+    // Variables para imagen local
+    Uint8List? imagenBytes;
+    String? imagenFilename;
+    final ImagePicker _picker = ImagePicker();
+
+    // Convertir IDs a int si vienen como String
+    int? categoriaActual = platillo['ID_Categoria'] is int
+        ? platillo['ID_Categoria']
+        : int.tryParse(platillo['ID_Categoria']?.toString() ?? '');
+
+    int? estadoActual = platillo['ID_Estado'] is int
+        ? platillo['ID_Estado']
+        : int.tryParse(platillo['ID_Estado']?.toString() ?? '');
+
+    // Normalizar valores iniciales como en admin
+    if ((categoriaActual == null ||
+            !(categorias.any((cat) {
+              final id = cat['ID_Categoria'];
+              final intId = id is int ? id : int.tryParse(id.toString());
+              return intId == categoriaActual;
+            }))) &&
+        categorias.isNotEmpty) {
+      final firstId = categorias.first['ID_Categoria'];
+      categoriaActual =
+          firstId is int ? firstId : int.tryParse(firstId.toString());
+    }
+
+    if (estadoActual != 1 && estadoActual != 2) {
+      estadoActual = 2;
+    }
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (BuildContext context) {
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            return DraggableScrollableSheet(
+              initialChildSize: 0.85,
+              minChildSize: 0.5,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                      ),
+                    ],
+                  ),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Handle
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                          ),
+                        ),
+                        // Título
+                        Text(
+                          'Editar Platillo',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: colorPrimario,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 20),
+                        // Campo Nombre
+                        TextField(
+                          controller: nombreController,
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'Nombre del platillo',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            prefixIcon: Icon(
+                              Icons.restaurant_menu,
+                              color: colorPrimario,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.blueAccent,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Botón seleccionar imagen
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final XFile? picked =
+                                      await _picker.pickImage(
+                                    source: ImageSource.gallery,
+                                    imageQuality: 85,
+                                  );
+                                  if (picked != null) {
+                                    final bytes = await picked.readAsBytes();
+                                    setModalState(() {
+                                      imagenBytes = bytes;
+                                      imagenFilename = picked.name;
+                                      imagenController.text = '';
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.photo_library),
+                                label: const Text('Cambiar imagen'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colorPrimario,
+                                  foregroundColor: Colors.white,
+                                  padding:
+                                      const EdgeInsets.symmetric(vertical: 14),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 12),
+                        // Campo URL imagen
+                        TextField(
+                          controller: imagenController,
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'URL de imagen (opcional)',
+                            prefixIcon:
+                                Icon(Icons.image, color: colorPrimario),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            setModalState(() {});
+                          },
+                        ),
+                        const SizedBox(height: 12),
+                        // Preview imagen
+                        if (imagenBytes != null)
+                          Container(
+                            height: 140,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.memory(
+                                imagenBytes!,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          )
+                        else if (imagenController.text.trim().isNotEmpty)
+                          Container(
+                            height: 140,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: FlexibleImage(
+                                source: imagenController.text,
+                                name: nombreController.text,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        // Campo Precio
+                        TextField(
+                          controller: precioController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'Precio (ej: 12.99)',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            prefixIcon: Icon(
+                              Icons.attach_money,
+                              color: Colors.green.shade600,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Campo Descripción
+                        TextField(
+                          controller: descripcionController,
+                          maxLines: 3,
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'Descripción del platillo',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Dropdown Categoría
+                        DropdownButtonFormField<int>(
+                          value: categorias.any((cat) {
+                            final id = cat['ID_Categoria'];
+                            final catId = id is int ? id : int.tryParse(id.toString());
+                            return catId == categoriaActual;
+                          }) ? categoriaActual : null,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            labelText: 'Categoría',
+                            hintText: 'Seleccionar Categoría',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          items: categorias
+                              .where(
+                                (cat) =>
+                                    cat['ID_Categoria'] != null &&
+                                    cat['Descripcion'] != null,
+                              )
+                              .map((cat) {
+                                final id = cat['ID_Categoria'];
+                                final catId = id is int
+                                    ? id
+                                    : int.tryParse(id.toString());
+                                return DropdownMenuItem<int>(
+                                  value: catId,
+                                  child: Text(cat['Descripcion'].toString()),
+                                );
+                              })
+                              .toList(),
+                          onChanged: (value) {
+                            setModalState(() {
+                              categoriaActual = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        // Dropdown Estado
+                        DropdownButtonFormField<int>(
+                          value: (estadoActual == 1 || estadoActual == 2)
+                              ? estadoActual
+                              : null,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            labelText: 'Estado',
+                            hintText: 'Seleccionar Estado',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: colorPrimario,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          items: const [
+                            DropdownMenuItem(
+                              value: 1,
+                              child: Text('No Disponible'),
+                            ),
+                            DropdownMenuItem(
+                              value: 2,
+                              child: Text('Disponible'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setModalState(() {
+                              estadoActual = value;
+                            });
+                          },
+                        ),
+                        const SizedBox(height: 16),
+                        // Botón Actualizar
+                        ElevatedButton(
+                          onPressed: () async {
+                            try {
+                              // Convertir ID_Menu a int
+                              final idMenu = platillo['ID_Menu'] is int
+                                  ? platillo['ID_Menu']
+                                  : int.tryParse(
+                                      platillo['ID_Menu']?.toString() ?? '0',
+                                    );
+
+                              print(
+                                '🔄 Actualizando platillo ID: $idMenu',
+                              );
+
+                              Map<String, dynamic> datosActualizados = {
+                                'ID_Menu': idMenu,
+                                'Platillo': nombreController.text.trim(),
+                                'Precio': precioController.text.trim(),
+                                'Descripcion':
+                                    descripcionController.text.trim(),
+                                'ID_Categoria': categoriaActual,
+                                'ID_Estado': estadoActual,
+                              };
+
+                              // Solo incluir Imagen si cambió
+                              if (imagenController.text.trim() !=
+                                  platillo['Imagen']) {
+                                datosActualizados['Imagen'] =
+                                    imagenController.text.trim();
+                              }
+
+                              print('📤 Datos a enviar: $datosActualizados');
+
+                              bool success = false;
+                              if (imagenBytes != null) {
+                                // Actualizar con imagen nueva
+                                success =
+                                    await MenuService.updateMenuItemWithImage(
+                                  datosActualizados,
+                                  imageBytes: imagenBytes,
+                                  imageFilename:
+                                      imagenFilename ?? 'imagen.jpg',
+                                );
+                              } else {
+                                // Actualizar sin cambiar imagen
+                                success = await MenuService.updateMenuItem(
+                                  datosActualizados,
+                                );
+                              }
+
+                              if (success) {
+                                print('✅ Platillo actualizado exitosamente');
+                                if (context.mounted) {
+                                  Navigator.of(context).pop();
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    SnackBar(
+                                      content: Text(
+                                        '✓ Platillo actualizado exitosamente',
+                                      ),
+                                      backgroundColor: Colors.green,
+                                    ),
+                                  );
+                                  _fetchMenuItems();
+                                }
+                              } else {
+                                throw Exception(
+                                  'Error al actualizar el platillo',
+                                );
+                              }
+                            } catch (e) {
+                              print('❌ Error al actualizar: $e');
+                              if (context.mounted) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(
+                                    content: Text('Error: $e'),
+                                    backgroundColor: Colors.red,
+                                  ),
+                                );
+                              }
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: colorPrimario,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 20,
+                            ),
+                            elevation: 4,
+                          ),
+                          child: const Text(
+                            'Actualizar',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 12),
+                      ],
+                    ),
+                  ),
+                );
+              },
+            );
+          },
+        );
+      },
+    );
+  }
+
+  // ✅ CONFIRMAR ELIMINACIÓN DE PLATILLO
+  void _confirmarEliminarPlatillo(
+    BuildContext context,
+    Map<String, dynamic> platillo,
+    Color colorPrimario,
+  ) {
+    showDialog(
+      context: context,
+      builder: (BuildContext context) {
+        return AlertDialog(
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+          ),
+          title: Text(
+            '¿Eliminar platillo?',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              color: colorPrimario,
+            ),
+          ),
+          content: Text(
+            '¿Estás seguro de que deseas eliminar "${platillo['Platillo']}"?',
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancelar'),
+            ),
+            ElevatedButton(
+              onPressed: () async {
+                try {
+                  // Convertir ID_Menu a int
+                  final idMenu = platillo['ID_Menu'] is int
+                      ? platillo['ID_Menu']
+                      : int.tryParse(platillo['ID_Menu']?.toString() ?? '0');
+
+                  print('🗑️ Eliminando platillo ID: $idMenu');
+
+                  final success =
+                      await MenuService.deleteMenuItem(idMenu ?? 0);
+
+                  if (success) {
+                    print('✅ Platillo eliminado exitosamente');
+                    if (context.mounted) {
+                      Navigator.pop(context);
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('✓ Platillo eliminado'),
+                          backgroundColor: Colors.green,
+                        ),
+                      );
+                      _fetchMenuItems();
+                    }
+                  } else {
+                    throw Exception('Error al eliminar');
+                  }
+                } catch (e) {
+                  print('❌ Error: $e');
+                  if (context.mounted) {
+                    Navigator.pop(context);
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Error: $e'),
+                        backgroundColor: Colors.red,
+                      ),
+                    );
+                  }
+                }
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red,
+                foregroundColor: Colors.white,
+              ),
+              child: const Text('Eliminar'),
+            ),
+          ],
+        );
+      },
+    );
+  }
+
+
   void _mostrarFormularioPlatilloEmpleado(BuildContext context) {
     // Usar el color primario de la app para los modales
     const Color _modalPrimary = Color.fromRGBO(0, 20, 34, 1);
@@ -100,7 +874,28 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
-        return DraggableScrollableSheet(
+        // Estados locales del modal
+        int? selectedCategoriaId = categoriaSeleccionada;
+        int selectedEstadoId = estadoSeleccionado ?? 2;
+        return StatefulBuilder(
+          builder: (BuildContext context, StateSetter setModalState) {
+            // Asegurar defaults válidos
+            if ((selectedCategoriaId == null ||
+                    !(categorias.any((cat) {
+                      final id = cat['ID_Categoria'];
+                      final intId = id is int ? id : int.tryParse(id.toString());
+                      return intId == selectedCategoriaId;
+                    }))) &&
+                categorias.isNotEmpty) {
+              final firstId = categorias.first['ID_Categoria'];
+              selectedCategoriaId = firstId is int
+                  ? firstId
+                  : int.tryParse(firstId.toString());
+            }
+            if (selectedEstadoId != 1 && selectedEstadoId != 2) {
+              selectedEstadoId = 2;
+            }
+            return DraggableScrollableSheet(
           initialChildSize: 0.78,
           minChildSize: 0.4,
           maxChildSize: 0.95,
@@ -191,12 +986,13 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                                 imageQuality: 85,
                               );
                               if (picked != null) {
-                                imagenBytes = await picked.readAsBytes();
-                                imagenFilename = picked.name;
-                                // Limpiar campo URL si había
-                                imagenController.text = '';
-                                // actualizar UI
-                                setState(() {});
+                                final b = await picked.readAsBytes();
+                                setModalState(() {
+                                  imagenBytes = b;
+                                  imagenFilename = picked.name;
+                                  // Limpiar campo URL si había
+                                  imagenController.text = '';
+                                });
                               }
                             },
                             icon: const Icon(Icons.photo_library),
@@ -250,8 +1046,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         ),
                       ),
                       onChanged: (v) {
-                        // rebuild para mostrar preview si pega URL
-                        setState(() {});
+                        setModalState(() {});
                       },
                     ),
                     const SizedBox(height: 12),
@@ -348,96 +1143,100 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                       ),
                     ),
                     const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      value: categoriaSeleccionada,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        hintText: 'Seleccionar Categoría',
-                        hintStyle: TextStyle(
-                          color: Colors.black.withOpacity(0.6),
-                        ),
-                        enabledBorder: OutlineInputBorder(
+                    // Selector de Categoría (estilo admin)
+                    if (categorias.isNotEmpty)
+                      Container(
+                        decoration: BoxDecoration(
+                          color: Colors.grey.shade50,
                           borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
+                          border: Border.all(
                             color: _modalPrimary,
                             width: 1,
                           ),
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 2,
-                          ),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 4,
                         ),
-                      ),
-                      items: categorias.isNotEmpty
-                          ? categorias
-                                .where(
-                                  (cat) =>
-                                      cat['ID_Categoria'] != null &&
-                                      cat['Descripcion'] != null,
-                                )
-                                .map((cat) {
-                                  final id = cat['ID_Categoria'];
-                                  return DropdownMenuItem<int>(
-                                    value: id is int
-                                        ? id
-                                        : int.tryParse(id.toString()),
-                                    child: Text(cat['Descripcion'].toString()),
-                                  );
-                                })
-                                .toList()
-                          : [
-                              const DropdownMenuItem<int>(
-                                value: null,
-                                child: Text('No hay categorías'),
+                        child: DropdownButtonHideUnderline(
+                          child: DropdownButton<int>(
+                            value: selectedCategoriaId,
+                            isExpanded: true,
+                            hint: Text(
+                              'Seleccionar Categoría',
+                              style: TextStyle(
+                                color: Colors.black.withOpacity(0.6),
                               ),
-                            ],
-                      onChanged: (value) {
-                        setState(() {
-                          categoriaSeleccionada = value;
-                        });
-                      },
-                    ),
-                    const SizedBox(height: 16),
-                    DropdownButtonFormField<int>(
-                      value: estadoSeleccionado,
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        hintText: 'Seleccionar Estado',
-                        hintStyle: TextStyle(
-                          color: Colors.black.withOpacity(0.6),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 2,
+                            ),
+                            icon: Icon(
+                              Icons.arrow_drop_down,
+                              color: _modalPrimary,
+                            ),
+                            items: categorias.map((cat) {
+                              final id = cat['ID_Categoria'];
+                              final intId =
+                                  id is int ? id : int.tryParse(id.toString());
+                              return DropdownMenuItem<int>(
+                                value: intId,
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.category, color: _modalPrimary),
+                                    const SizedBox(width: 8),
+                                    Text(
+                                      cat['Descripcion']?.toString() ?? '',
+                                      style: TextStyle(color: Colors.black),
+                                    ),
+                                  ],
+                                ),
+                              );
+                            }).toList(),
+                            onChanged: (value) {
+                              setModalState(() {
+                                selectedCategoriaId = value;
+                                categoriaSeleccionada = value;
+                              });
+                            },
                           ),
                         ),
                       ),
-                      items: const [
-                        DropdownMenuItem(
-                          value: 1,
-                          child: Text('No Disponible'),
+                    const SizedBox(height: 16),
+                    // Selector de Estado (estilo admin)
+                    Container(
+                      decoration: BoxDecoration(
+                        color: Colors.grey.shade50,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: _modalPrimary, width: 1),
+                      ),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 4,
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<int>(
+                          value: selectedEstadoId,
+                          isExpanded: true,
+                          icon: Icon(
+                            Icons.arrow_drop_down,
+                            color: _modalPrimary,
+                          ),
+                          items: const [
+                            DropdownMenuItem<int>(
+                              value: 2,
+                              child: Text('Disponible'),
+                            ),
+                            DropdownMenuItem<int>(
+                              value: 1,
+                              child: Text('No Disponible'),
+                            ),
+                          ],
+                          onChanged: (value) {
+                            setModalState(() {
+                              selectedEstadoId = value ?? 2;
+                              estadoSeleccionado = selectedEstadoId;
+                            });
+                          },
                         ),
-                        DropdownMenuItem(value: 2, child: Text('Disponible')),
-                      ],
-                      onChanged: (value) {
-                        setState(() {
-                          estadoSeleccionado = value;
-                        });
-                      },
+                      ),
                     ),
                     const SizedBox(height: 16),
                     ElevatedButton(
@@ -451,8 +1250,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                                 'Platillo': nombreController.text,
                                 'Precio': precioController.text,
                                 'Descripcion': descripcionController.text,
-                                'ID_Categoria': categoriaSeleccionada,
-                                'ID_Estado': estadoSeleccionado,
+                                'ID_Categoria': selectedCategoriaId,
+                                'ID_Estado': selectedEstadoId,
                               },
                               imageBytes: imagenBytes,
                               imageFilename: imagenFilename ?? 'imagen.jpg',
@@ -464,8 +1263,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                               'Precio': precioController.text,
                               'Descripcion': descripcionController.text,
                               'Imagen': imagenController.text,
-                              'ID_Categoria': categoriaSeleccionada,
-                              'ID_Estado': estadoSeleccionado,
+                              'ID_Categoria': selectedCategoriaId,
+                              'ID_Estado': selectedEstadoId,
                             });
                           }
                           if (success) {
@@ -502,6 +1301,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                   ],
                 ),
               ),
+            );
+          },
             );
           },
         );
@@ -837,8 +1638,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   ) {
     return GestureDetector(
       onTap: () {
-        // Al tocar, mostrar el formulario de edición (reusar el diálogo de agregar)
-        _mostrarFormularioPlatilloEmpleado(context);
+        // Al tocar, mostrar opciones (Ver/Editar/Eliminar)
+        _mostrarOpcionesPlatillo(context, item, colorPrimario, colorAccento);
       },
       child: LayoutBuilder(
         builder: (context, constraints) {

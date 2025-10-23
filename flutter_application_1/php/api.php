@@ -34,7 +34,7 @@ try {
     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
         if (strpos($content_type, 'application/json') !== false) {
-            $json_data = json_decode(file_get_contents('php://input'), true);
+            $json_data = json.decode(file_get_contents('php://input'), true);
             if ($json_data) $input_data = $json_data;
         } else {
             $input_data = $_POST;
@@ -43,7 +43,8 @@ try {
         $input_data = $_GET;
     }
 
-    $action = $input_data['action'] ?? null;
+    // Leer action desde GET (query string) primero, luego desde input_data
+    $action = $_GET['action'] ?? $input_data['action'] ?? null;
 
     // ----------------------- CATEGORIAS -----------------------
     if ($action === 'get_categorias') {
@@ -359,6 +360,166 @@ try {
         } catch (PDOException $e) {
             error_log('Error en la consulta SQL: ' . $e->getMessage());
             echo json_encode(['success' => false, 'message' => 'Error obteniendo el menú: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // ----------------------- AGREGAR MENU ITEM -----------------------
+    if ($action === 'add_menu_item') {
+        error_log('=== ADD_MENU_ITEM ===');
+        error_log('Input data: ' . print_r($input_data, true));
+        
+        $platillo = $input_data['Platillo'] ?? '';
+        $precio = $input_data['Precio'] ?? '';
+        $descripcion = $input_data['Descripcion'] ?? '';
+        $imagen = $input_data['Imagen'] ?? '';
+        $id_categoria = $input_data['ID_Categoria'] ?? 1; // Por defecto categoría 1
+        $id_estado = $input_data['ID_Estado'] ?? 2; // Por defecto estado 2 (Disponible)
+
+        error_log("Platillo: $platillo, Precio: $precio, Categoria: $id_categoria, Estado: $id_estado");
+
+        // Validar campos requeridos
+        if (trim($platillo) === '' || trim($precio) === '') {
+            error_log('Error: Platillo o precio vacíos');
+            error_log("Platillo: '$platillo', Precio: '$precio'");
+            echo json_encode(['success' => false, 'message' => 'Platillo y precio son requeridos']);
+            exit;
+        }
+
+        try {
+            // Manejar upload de imagen (campo multipart 'imagen_file')
+            if (isset($_FILES['imagen_file']) && $_FILES['imagen_file']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = __DIR__ . '/uploads';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                $tmpName = $_FILES['imagen_file']['tmp_name'];
+                $origName = basename($_FILES['imagen_file']['name']);
+                $ext = pathinfo($origName, PATHINFO_EXTENSION);
+                $newName = 'platillo_' . time() . '_' . uniqid() . '.' . $ext;
+                $dest = $uploadDir . '/' . $newName;
+                if (move_uploaded_file($tmpName, $dest)) {
+                    $imagen = '/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/uploads/' . $newName;
+                }
+            }
+
+            $stmt = $pdo->prepare("INSERT INTO menu (Platillo, Precio, Descripcion, ID_Categoria, ID_Estado, Imagen) VALUES (?, ?, ?, ?, ?, ?)");
+            $success = $stmt->execute([$platillo, $precio, $descripcion, $id_categoria, $id_estado, $imagen]);
+            
+            if ($success) {
+                echo json_encode(['success' => true, 'message' => 'Platillo agregado exitosamente', 'id' => $pdo->lastInsertId()]);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Error al agregar el platillo']);
+            }
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Error agregando platillo: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // ----------------------- ACTUALIZAR MENU ITEM -----------------------
+    if ($action === 'update_menu_item') {
+        error_log('=== UPDATE_MENU_ITEM ===');
+        error_log('Input data: ' . print_r($input_data, true));
+        
+        $id_menu = $input_data['ID_Menu'] ?? '';
+        $platillo = $input_data['Platillo'] ?? '';
+        $precio = $input_data['Precio'] ?? '';
+        $descripcion = $input_data['Descripcion'] ?? '';
+        $imagen = $input_data['Imagen'] ?? '';
+        $id_categoria = $input_data['ID_Categoria'] ?? null;
+        $id_estado = $input_data['ID_Estado'] ?? null;
+
+        error_log("ID: $id_menu, Platillo: $platillo, Precio: $precio, Categoria: $id_categoria, Estado: $id_estado");
+
+        // Validar campos requeridos (permitir 0 como valor válido)
+        if ($id_menu === '' || $id_menu === null || trim($platillo) === '' || trim($precio) === '') {
+            error_log('Error: ID, Platillo o precio vacíos');
+            error_log("ID_Menu: '$id_menu', Platillo: '$platillo', Precio: '$precio'");
+            echo json_encode(['success' => false, 'message' => 'ID, Platillo y precio son requeridos']);
+            exit;
+        }
+
+        try {
+            // Verificar que el platillo existe y obtener su imagen actual
+            $check = $pdo->prepare("SELECT ID_Menu, ID_Categoria, ID_Estado, Imagen FROM menu WHERE ID_Menu = ?");
+            $check->execute([$id_menu]);
+            $exists = $check->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$exists) {
+                error_log('Error: Platillo no encontrado');
+                echo json_encode(['success' => false, 'message' => 'Platillo no encontrado']);
+                exit;
+            }
+
+            // Usar valores existentes si no se proporcionan nuevos
+            if ($id_categoria === null || $id_categoria === '') $id_categoria = $exists['ID_Categoria'];
+            if ($id_estado === null || $id_estado === '') $id_estado = $exists['ID_Estado'];
+            
+            // Si no hay imagen nueva, mantener la existente
+            if (empty($imagen)) {
+                $imagen = $exists['Imagen'];
+            }
+
+            // Manejar upload de imagen (campo multipart 'imagen_file')
+            if (isset($_FILES['imagen_file']) && $_FILES['imagen_file']['error'] === UPLOAD_ERR_OK) {
+                $uploadDir = __DIR__ . '/uploads';
+                if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
+                $tmpName = $_FILES['imagen_file']['tmp_name'];
+                $origName = basename($_FILES['imagen_file']['name']);
+                $ext = pathinfo($origName, PATHINFO_EXTENSION);
+                $newName = 'platillo_' . time() . '_' . uniqid() . '.' . $ext;
+                $dest = $uploadDir . '/' . $newName;
+                if (move_uploaded_file($tmpName, $dest)) {
+                    $imagen = '/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/uploads/' . $newName;
+                }
+            }
+
+            error_log("Actualizando: Platillo=$platillo, Precio=$precio, Categoria=$id_categoria, Estado=$id_estado, Imagen=$imagen");
+
+            $stmt = $pdo->prepare("UPDATE menu SET Platillo = ?, Precio = ?, Descripcion = ?, ID_Categoria = ?, ID_Estado = ?, Imagen = ? WHERE ID_Menu = ?");
+            $success = $stmt->execute([$platillo, $precio, $descripcion, $id_categoria, $id_estado, $imagen, $id_menu]);
+            
+            if ($success) {
+                error_log('✓ Platillo actualizado exitosamente');
+                echo json_encode(['success' => true, 'message' => 'Platillo actualizado exitosamente']);
+            } else {
+                error_log('✗ Error al ejecutar UPDATE');
+                echo json_encode(['success' => false, 'message' => 'Error al actualizar el platillo']);
+            }
+        } catch (PDOException $e) {
+            error_log('✗ Exception PDO: ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Error actualizando platillo: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // ----------------------- ELIMINAR MENU ITEM -----------------------
+    if ($action === 'delete_menu_item') {
+        error_log('=== DELETE_MENU_ITEM ===');
+        error_log('Input data: ' . print_r($input_data, true));
+        
+        $id_menu = $input_data['ID_Menu'] ?? '';
+        
+        error_log("ID a eliminar: $id_menu");
+
+        // Validar ID (permitir 0 como valor válido)
+        if ($id_menu === '' || $id_menu === null) {
+            error_log('Error: ID vacío');
+            error_log("ID_Menu recibido: '$id_menu'");
+            echo json_encode(['success' => false, 'message' => 'ID del platillo requerido']);
+            exit;
+        }
+
+        try {
+            $stmt = $pdo->prepare("DELETE FROM menu WHERE ID_Menu = ?");
+            $success = $stmt->execute([$id_menu]);
+            
+            if ($success && $stmt->rowCount() > 0) {
+                echo json_encode(['success' => true, 'message' => 'Platillo eliminado exitosamente']);
+            } else {
+                echo json_encode(['success' => false, 'message' => 'Platillo no encontrado']);
+            }
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Error eliminando platillo: ' . $e->getMessage()]);
         }
         exit;
     }
