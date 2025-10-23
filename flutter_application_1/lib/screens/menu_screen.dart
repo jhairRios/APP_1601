@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
+import 'dart:typed_data';
 import '../services/menu_service.dart';
+import '../widgets/flexible_image.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -78,7 +81,7 @@ class _MenuScreenState extends State<MenuScreen> {
               ),
               child: ElevatedButton(
                 onPressed: () {
-                  _mostrarFormularioPlatillo(context);
+                  _mostrarFormularioPlatilloAdmin(context);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorPrimario,
@@ -197,124 +200,317 @@ class _MenuScreenState extends State<MenuScreen> {
     );
   }
 
-  void _mostrarFormularioPlatillo(BuildContext context) {
+  void _mostrarFormularioPlatilloAdmin(BuildContext context) {
+    // Copiado/adaptado del modal de empleado (bottom-sheet con selector de imagen)
+    const Color _modalPrimary = Color.fromRGBO(0, 20, 34, 1);
     final TextEditingController nombreController = TextEditingController();
     final TextEditingController precioController = TextEditingController();
+    final TextEditingController descripcionController = TextEditingController();
+    final TextEditingController imagenController = TextEditingController();
+    Uint8List? imagenBytes;
+    String? imagenFilename;
+    final ImagePicker _picker = ImagePicker();
 
-    showDialog(
+    showModalBottomSheet(
       context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
       builder: (BuildContext context) {
-        return Dialog(
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(20),
-          ),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              borderRadius: BorderRadius.circular(20),
-              color: Colors.white,
-            ),
-            child: SingleChildScrollView(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Text(
-                    'Agregar Nuevo Platillo',
-                    style: TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.bold,
-                      color: colorPrimario,
-                    ),
-                    textAlign: TextAlign.center,
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Campo Nombre del Platillo
-                  TextField(
-                    controller: nombreController,
-                    decoration: InputDecoration(
-                      labelText: 'Nombre del Platillo',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Campo Precio del Platillo
-                  TextField(
-                    controller: precioController,
-                    keyboardType: TextInputType.number,
-                    decoration: InputDecoration(
-                      labelText: 'Precio',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-
-                  // Botones
-                  Row(
-                    children: [
-                      Expanded(
-                        child: OutlinedButton(
-                          onPressed: () {
-                            Navigator.of(context).pop();
-                          },
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: colorPrimario,
-                            side: BorderSide(color: colorPrimario),
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Cancelar'),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: ElevatedButton(
-                          onPressed: () {
-                            if (nombreController.text.isNotEmpty &&
-                                precioController.text.isNotEmpty) {
-                              // Validar que el precio sea un número válido
-                              double? precio = double.tryParse(
-                                precioController.text,
-                              );
-                              if (precio != null) {
-                                // Agregar platillo a la lista
-                                setState(() {
-                                  _platillos.add({
-                                    'Platillo': nombreController.text,
-                                    'Precio': precio,
-                                    'Descripcion': 'Descripción pendiente',
-                                    'Imagen': null,
-                                  });
-                                });
-                                Navigator.of(context).pop();
-                              }
-                            }
-                          },
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: colorPrimario,
-                            foregroundColor: Colors.white,
-                            shape: RoundedRectangleBorder(
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            padding: const EdgeInsets.symmetric(vertical: 12),
-                          ),
-                          child: const Text('Guardar'),
-                        ),
-                      ),
-                    ],
+        return DraggableScrollableSheet(
+          initialChildSize: 0.78,
+          minChildSize: 0.4,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) {
+            return Container(
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(20),
+                  topRight: Radius.circular(20),
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.08),
+                    blurRadius: 12,
                   ),
                 ],
               ),
-            ),
-          ),
+              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+              child: SingleChildScrollView(
+                controller: scrollController,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    Center(
+                      child: Container(
+                        width: 48,
+                        height: 4,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[300],
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                    Text(
+                      'Agregar Nuevo Platillo',
+                      style: TextStyle(
+                        fontSize: 20,
+                        fontWeight: FontWeight.bold,
+                        color: _modalPrimary,
+                      ),
+                      textAlign: TextAlign.center,
+                    ),
+                    const SizedBox(height: 20),
+                    TextField(
+                      controller: nombreController,
+                      style: TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        hintText: 'Nombre del platillo',
+                        hintStyle: TextStyle(
+                          color: Colors.black.withOpacity(0.6),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.restaurant_menu,
+                          color: _modalPrimary,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: Colors.blueAccent,
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: ElevatedButton.icon(
+                            onPressed: () async {
+                              final XFile? picked = await _picker.pickImage(
+                                source: ImageSource.gallery,
+                                imageQuality: 85,
+                              );
+                              if (picked != null) {
+                                imagenBytes = await picked.readAsBytes();
+                                imagenFilename = picked.name;
+                                imagenController.text = '';
+                                setState(() {});
+                              }
+                            },
+                            icon: const Icon(Icons.photo_library),
+                            label: const Text('Seleccionar imagen'),
+                            style: ElevatedButton.styleFrom(
+                              backgroundColor: _modalPrimary,
+                              foregroundColor: Colors.white,
+                              padding: const EdgeInsets.symmetric(vertical: 14),
+                              shape: RoundedRectangleBorder(
+                                borderRadius: BorderRadius.circular(12),
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          onPressed: () {},
+                          icon: const Icon(Icons.link),
+                          color: _modalPrimary,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: imagenController,
+                      style: TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        hintText:
+                            'Imagen (URL, opcional si eliges archivo local)',
+                        prefixIcon: Icon(Icons.image, color: _modalPrimary),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                      onChanged: (v) {
+                        setState(() {});
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    if (imagenBytes != null)
+                      Container(
+                        height: 140,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.memory(imagenBytes!, fit: BoxFit.cover),
+                        ),
+                      )
+                    else if (imagenController.text.trim().isNotEmpty)
+                      Container(
+                        height: 140,
+                        margin: const EdgeInsets.only(bottom: 12),
+                        decoration: BoxDecoration(
+                          color: Colors.grey[100],
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: FlexibleImage(
+                            source: imagenController.text,
+                            name: nombreController.text,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                    TextField(
+                      controller: precioController,
+                      keyboardType: const TextInputType.numberWithOptions(
+                        decimal: true,
+                      ),
+                      style: TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        hintText: 'Precio (ej: 12.99)',
+                        hintStyle: TextStyle(
+                          color: Colors.black.withOpacity(0.6),
+                        ),
+                        prefixIcon: Icon(
+                          Icons.attach_money,
+                          color: Colors.green.shade600,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: descripcionController,
+                      maxLines: 3,
+                      style: TextStyle(color: Colors.black),
+                      decoration: InputDecoration(
+                        filled: true,
+                        fillColor: Colors.grey.shade50,
+                        hintText: 'Descripción del platillo',
+                        hintStyle: TextStyle(
+                          color: Colors.black.withOpacity(0.6),
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 1,
+                          ),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide(
+                            color: _modalPrimary,
+                            width: 2,
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    ElevatedButton(
+                      onPressed: () async {
+                        try {
+                          bool success = false;
+                          if (imagenBytes != null) {
+                            success = await MenuService.addMenuItemWithImage(
+                              {
+                                'Platillo': nombreController.text,
+                                'Precio': precioController.text,
+                                'Descripcion': descripcionController.text,
+                              },
+                              imageBytes: imagenBytes,
+                              imageFilename: imagenFilename ?? 'imagen.jpg',
+                            );
+                          } else {
+                            success = await MenuService.addMenuItem({
+                              'Platillo': nombreController.text,
+                              'Precio': precioController.text,
+                              'Descripcion': descripcionController.text,
+                              'Imagen': imagenController.text,
+                            });
+                          }
+                          if (success) {
+                            Navigator.of(context).pop();
+                            _fetchPlatillos();
+                          } else {
+                            throw Exception('Error al guardar el platillo');
+                          }
+                        } catch (e) {
+                          print('Error: $e');
+                        }
+                      },
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: _modalPrimary,
+                        foregroundColor: Colors.white,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        padding: const EdgeInsets.symmetric(
+                          vertical: 16,
+                          horizontal: 20,
+                        ),
+                        elevation: 4,
+                      ),
+                      child: const Text(
+                        'Guardar',
+                        style: TextStyle(
+                          fontSize: 16,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
         );
       },
     );
