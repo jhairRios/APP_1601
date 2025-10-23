@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
+import 'dart:async';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 
@@ -20,12 +21,24 @@ class _MenuScreenState extends State<MenuScreen> {
   // Lista de platillos registrados
   List<Map<String, dynamic>> _platillos = [];
   List<Map<String, dynamic>> _categorias = [];
+  late StreamSubscription<bool> _menuSubscription;
 
   @override
   void initState() {
     super.initState();
     _fetchPlatillos();
     _fetchCategorias();
+    _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
+      _fetchPlatillos();
+    });
+  }
+
+  @override
+  void dispose() {
+    try {
+      _menuSubscription.cancel();
+    } catch (_) {}
+    super.dispose();
   }
 
   Future<void> _fetchCategorias() async {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'dart:async';
 import '../services/restaurante_service.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
@@ -162,6 +163,7 @@ class _ClienteScreenState extends State<ClienteScreen>
 
   // Lista cargada desde la API
   List<Map<String, dynamic>> _restaurantes = [];
+  late StreamSubscription<bool> _menuSubscription;
   // Indica si ya se abrió automáticamente el formulario al entrar
   bool _openedRestauranteForm = false;
 
@@ -201,6 +203,21 @@ class _ClienteScreenState extends State<ClienteScreen>
     _cargarRestaurantes();
     // Cargar menú desde la API
     _cargarMenuItems();
+    // Suscribirse a cambios en el menú para refrescar automáticamente
+    _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
+      _cargarMenuItems();
+    });
+  }
+
+  @override
+  void dispose() {
+    try {
+      _menuSubscription.cancel();
+    } catch (_) {}
+    _fadeController.dispose();
+    _scaleController.dispose();
+    _slideController.dispose();
+    super.dispose();
   }
 
   // ---------- Helpers para CRUD de restaurantes ----------
@@ -392,13 +409,7 @@ class _ClienteScreenState extends State<ClienteScreen>
     }
   }
 
-  @override
-  void dispose() {
-    _fadeController.dispose();
-    _scaleController.dispose();
-    _slideController.dispose();
-    super.dispose();
-  }
+  // dispose manejado más arriba para cancelar la suscripción y liberar controllers
 
   @override
   Widget build(BuildContext context) {

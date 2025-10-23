@@ -5,7 +5,7 @@ import 'package:http_parser/http_parser.dart';
 class RestauranteService {
   // Base URL dinámico: en web usamos el origen actual (permite localhost dev),
   // en dispositivos usamos la IP de la máquina de desarrollo.
-  // Usar la IP de la máquina de desarrollo siempre (evita que en web se solicite el index.html)
+  // Usar la IP de la máquina de desarrollo siemprge (evita que en web se solicite el index.html)
   static const String _baseUrl = 'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php';
 
   static Future<List<Map<String, dynamic>>> getRestaurantes() async {

@@ -1,4 +1,5 @@
 import 'package:http/http.dart' as http;
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'api_config.dart';
@@ -6,6 +7,8 @@ import 'package:http_parser/http_parser.dart';
 
 class MenuService {
   static const String _baseUrl = API_BASE_URL;
+  // Stream broadcast para notificar cambios en el menú (add/update/delete)
+  static final StreamController<bool> menuChangeController = StreamController<bool>.broadcast();
 
   static Future<List<dynamic>> getCategorias() async {
     try {
@@ -73,6 +76,10 @@ class MenuService {
           
           if (decoded is Map && decoded['success'] == true) {
             print('✓ Platillo agregado exitosamente');
+            // Notificar cambio
+            try {
+              menuChangeController.add(true);
+            } catch (_) {}
             return true;
           }
           print('✗ Error en respuesta: $decoded');
@@ -124,6 +131,9 @@ class MenuService {
         try {
           final decoded = json.decode(respStr);
           if (decoded is Map && decoded['success'] == true) {
+            try {
+              menuChangeController.add(true);
+            } catch (_) {}
             return true;
           }
           print('Error en respuesta: $decoded');
@@ -165,6 +175,9 @@ class MenuService {
           
           if (decoded is Map && decoded['success'] == true) {
             print('✓ Platillo actualizado exitosamente');
+            try {
+              menuChangeController.add(true);
+            } catch (_) {}
             return true;
           }
           print('✗ Error en respuesta: $decoded');
@@ -216,6 +229,9 @@ class MenuService {
         try {
           final decoded = json.decode(respStr);
           if (decoded is Map && decoded['success'] == true) {
+            try {
+              menuChangeController.add(true);
+            } catch (_) {}
             return true;
           }
           print('Error en respuesta: $decoded');
@@ -257,6 +273,9 @@ class MenuService {
           
           if (decoded is Map && decoded['success'] == true) {
             print('✓ Platillo eliminado exitosamente');
+            try {
+              menuChangeController.add(true);
+            } catch (_) {}
             return true;
           }
           print('✗ Error en respuesta: $decoded');

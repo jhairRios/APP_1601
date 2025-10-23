@@ -2,6 +2,7 @@ import 'dart:convert';
 
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_application_1/services/api_config.dart';
 
 // FlexibleImage: versión simplificada.
 // Ahora asume que `source` (o `name`) puede ser:
@@ -36,6 +37,14 @@ class _FlexibleImageState extends State<FlexibleImage> {
   void initState() {
     super.initState();
     _prepareCandidates();
+  }
+  
+  @override
+  void didUpdateWidget(covariant FlexibleImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if ((oldWidget.source ?? '') != (widget.source ?? '') || (oldWidget.name ?? '') != (widget.name ?? '')) {
+      _prepareCandidates();
+    }
   }
 
   Future<void> _prepareCandidates() async {
@@ -73,9 +82,17 @@ class _FlexibleImageState extends State<FlexibleImage> {
 
     // Bare name: try common extensions in assets/Menu/
     final exts = ['png', 'jpg', 'jpeg'];
-    final list = exts.map((e) => 'assets/Menu/$raw.$e').toList();
-    final existing = await _filterByManifest(list);
-    setState(() => _candidates = existing.isNotEmpty ? existing : list);
+    // Construir URL público basado en API_BASE_URL (remover /php/api.php)
+    var base = API_BASE_URL;
+    if (base.contains('/php/api.php')) base = base.replaceAll('/php/api.php', '/');
+    if (!base.endsWith('/')) base = '$base/';
+    final ts = DateTime.now().millisecondsSinceEpoch.toString();
+    final networkList = exts.map((e) => '${base}assets/Menu/$raw.$e?v=$ts').toList();
+    // Asset fallback
+    final assetList = exts.map((e) => 'assets/Menu/$raw.$e').toList();
+    // Combine: network first, then any existing assets
+    final existingAssets = await _filterByManifest(assetList);
+    setState(() => _candidates = [...networkList, ...(existingAssets.isNotEmpty ? existingAssets : assetList)]);
   }
 
   Future<List<String>> _filterByManifest(List<String> candidates) async {

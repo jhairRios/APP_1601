@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'dart:typed_data';
+import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
@@ -29,12 +30,25 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   int? estadoSeleccionado;
   int _selectedIndex = 0;
   List<dynamic> _menuItems = [];
+  late StreamSubscription<bool> _menuSubscription;
 
   @override
   void initState() {
     super.initState();
     _fetchCategorias();
     _fetchMenuItems();
+    // Suscribirse a cambios en el menú para refrescar automáticamente
+    _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
+      _fetchMenuItems();
+    });
+  }
+
+  @override
+  void dispose() {
+    try {
+      _menuSubscription.cancel();
+    } catch (_) {}
+    super.dispose();
   }
 
   Future<void> _fetchCategorias() async {
