@@ -4,6 +4,7 @@ import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
+import '../widgets/product_image_box.dart';
 
 class EmpleadoScreen extends StatefulWidget {
   const EmpleadoScreen({Key? key}) : super(key: key);
@@ -186,14 +187,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 // Imagen
                 if (platillo['Imagen'] != null &&
                     platillo['Imagen'].toString().isNotEmpty)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: FlexibleImage(
-                      source: platillo['Imagen'],
-                      name: platillo['Platillo'] ?? '',
-                      fit: BoxFit.cover,
-                      height: 200,
-                    ),
+                  ProductImageBox(
+                    source: platillo['Imagen'],
+                    name: platillo['Platillo'] ?? '',
+                    borderRadius: 12,
+                    height: 200,
                   ),
                 const SizedBox(height: 16),
                 // Nombre
@@ -478,37 +476,18 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         const SizedBox(height: 12),
                         // Preview imagen
                         if (imagenBytes != null)
-                          Container(
+                          ProductImageBox(
+                            bytes: imagenBytes,
+                            name: nombreController.text,
+                            borderRadius: 12,
                             height: 140,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.memory(
-                                imagenBytes!,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
                           )
                         else if (imagenController.text.trim().isNotEmpty)
-                          Container(
+                          ProductImageBox(
+                            source: imagenController.text,
+                            name: nombreController.text,
+                            borderRadius: 12,
                             height: 140,
-                            margin: const EdgeInsets.only(bottom: 12),
-                            decoration: BoxDecoration(
-                              color: Colors.grey[100],
-                              borderRadius: BorderRadius.circular(12),
-                            ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: FlexibleImage(
-                                source: imagenController.text,
-                                name: nombreController.text,
-                                fit: BoxFit.cover,
-                              ),
-                            ),
                           ),
                         // Campo Precio
                         TextField(
@@ -1685,26 +1664,19 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             ),
             child: Column(
               children: [
-                // Imagen con altura fija relativa
-                Container(
-                  height: imageH,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
+                // Imagen con altura fija relativa (estandarizada)
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
                   ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                    child: FlexibleImage(
+                  child: Container(
+                    color: Colors.grey[200],
+                    child: ProductImageBox(
                       source: item['Imagen'] ?? item['image'],
                       name: item['Platillo'] ?? item['name'],
-                      fit: BoxFit.cover,
+                      height: imageH,
+                      borderRadius: 0,
                     ),
                   ),
                 ),

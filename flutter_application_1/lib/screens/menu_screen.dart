@@ -3,6 +3,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:typed_data';
 import 'dart:async';
 import '../services/menu_service.dart';
+import '../widgets/product_image_box.dart';
 import '../widgets/flexible_image.dart';
 
 class MenuScreen extends StatefulWidget {
@@ -98,35 +99,28 @@ class _MenuScreenState extends State<MenuScreen> {
               borderRadius: BorderRadius.circular(12),
               boxShadow: [
                 BoxShadow(
-                  color: Colors.grey.withOpacity(0.1),
-                  spreadRadius: 1,
-                  blurRadius: 4,
-                  offset: const Offset(0, 2),
+                  color: Colors.black.withOpacity(0.08),
+                  blurRadius: 8,
+                  offset: const Offset(0, 4),
                 ),
               ],
             ),
             child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                // Imagen
-                Container(
-                  height: imageH,
-                  width: double.infinity,
-                  decoration: BoxDecoration(
-                    color: Colors.grey[200],
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
+                // Imagen del platillo en la card (estandarizada)
+                ClipRRect(
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(12),
+                    topRight: Radius.circular(12),
                   ),
-                  child: ClipRRect(
-                    borderRadius: const BorderRadius.only(
-                      topLeft: Radius.circular(12),
-                      topRight: Radius.circular(12),
-                    ),
-                    child: FlexibleImage(
+                  child: Container(
+                    color: Colors.grey[200],
+                    child: ProductImageBox(
                       source: item['Imagen'] ?? item['image'] ?? '',
                       name: item['Platillo'] ?? item['name'] ?? 'Sin nombre',
-                      fit: BoxFit.cover,
+                      height: imageH,
+                      borderRadius: 0, // ya aplicamos el redondeo externo
                     ),
                   ),
                 ),
@@ -405,7 +399,7 @@ class _MenuScreenState extends State<MenuScreen> {
                         ),
                       ),
                     ),
-                    // Imagen del platillo
+                    // Imagen del platillo (estandarizada)
                     if (platillo['Imagen'] != null &&
                         platillo['Imagen'].toString().isNotEmpty)
                       Container(
@@ -421,13 +415,11 @@ class _MenuScreenState extends State<MenuScreen> {
                             ),
                           ],
                         ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(16),
-                          child: FlexibleImage(
-                            source: platillo['Imagen'].toString(),
-                            name: platillo['Platillo']?.toString() ?? '',
-                            fit: BoxFit.cover,
-                          ),
+                        child: ProductImageBox(
+                          source: platillo['Imagen'].toString(),
+                          name: platillo['Platillo']?.toString() ?? '',
+                          borderRadius: 16,
+                          height: 200,
                         ),
                       ),
                     const SizedBox(height: 20),

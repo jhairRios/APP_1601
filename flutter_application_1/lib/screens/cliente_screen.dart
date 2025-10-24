@@ -3,6 +3,7 @@ import 'dart:async';
 import '../services/restaurante_service.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
+import '../widgets/product_image_box.dart';
 
 class ClienteScreen extends StatefulWidget {
   const ClienteScreen({super.key});
@@ -1052,10 +1053,16 @@ class _ClienteScreenState extends State<ClienteScreen>
                       topLeft: Radius.circular(12),
                       topRight: Radius.circular(12),
                     ),
-                    child: FlexibleImage(
-                      source: item['image'] ?? item['Imagen'],
-                      name: item['name'],
-                      fit: BoxFit.cover,
+                    child: Container(
+                      color: Colors.white,
+                      padding: const EdgeInsets.all(8),
+                      child: Center(
+                        child: FlexibleImage(
+                          source: item['image'] ?? item['Imagen'],
+                          name: item['name'],
+                          fit: BoxFit.contain,
+                        ),
+                      ),
                     ),
                   ),
                 ),
@@ -1128,7 +1135,7 @@ class _ClienteScreenState extends State<ClienteScreen>
         duration: const Duration(milliseconds: 500),
         vsync: this,
       ),
-      builder: (context) => AnimatedContainer(
+  builder: (context) => AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         height: MediaQuery.of(context).size.height * 0.7,
         decoration: const BoxDecoration(
@@ -1154,33 +1161,37 @@ class _ClienteScreenState extends State<ClienteScreen>
               ),
             ),
 
-            // Imagen grande del producto con Hero animation
+            // Imagen grande del producto con Hero animation (altura dinámica + AspectRatio)
             Hero(
               tag: 'product_${item['id']}_detail',
-              child: Container(
-                height: 200,
-                width: double.infinity,
-                margin: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: Colors.grey[200],
-                  borderRadius: BorderRadius.circular(16),
-                  boxShadow: [
-                    BoxShadow(
-                      color: Colors.black.withOpacity(0.1),
-                      spreadRadius: 2,
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final screenH = MediaQuery.of(context).size.height;
+                  final double maxH = (screenH * 0.3).clamp(160.0, 260.0);
+                  return Container(
+                    constraints: BoxConstraints(maxHeight: maxH),
+                    width: double.infinity,
+                    margin: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey[200],
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: Colors.black.withOpacity(0.1),
+                          spreadRadius: 2,
+                          blurRadius: 8,
+                          offset: const Offset(0, 4),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
-                  child: ClipRRect(
-                  borderRadius: BorderRadius.circular(16),
-                  child: FlexibleImage(
-                    source: item['image'] ?? item['Imagen'],
-                    name: item['name'],
-                    fit: BoxFit.cover,
-                  ),
-                ),
+                    child: ProductImageBox(
+                      source: item['image'] ?? item['Imagen'],
+                      name: item['name'],
+                      borderRadius: 16,
+                      maxHeight: maxH,
+                    ),
+                  );
+                },
               ),
             ),
 
@@ -1191,109 +1202,118 @@ class _ClienteScreenState extends State<ClienteScreen>
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // Nombre del producto con animación
-                    TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 600),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Transform.translate(
-                          offset: Offset(0, 30 * (1 - value)),
-                          child: Opacity(
-                            opacity: value,
-                            child: Text(
-                              item['name'],
+                    // Contenido desplazable
+                    Expanded(
+                      child: SingleChildScrollView(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            // Nombre del producto con animación
+                            TweenAnimationBuilder<double>(
+                              duration: const Duration(milliseconds: 600),
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              builder: (context, value, child) {
+                                return Transform.translate(
+                                  offset: Offset(0, 30 * (1 - value)),
+                                  child: Opacity(
+                                    opacity: value,
+                                    child: Text(
+                                      item['name'],
+                                      style: TextStyle(
+                                        fontSize: 24,
+                                        fontWeight: FontWeight.bold,
+                                        color: colorPrimario,
+                                      ),
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 8),
+
+                            // Categoría
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 12,
+                                vertical: 6,
+                              ),
+                              decoration: BoxDecoration(
+                                color: colorPrimario.withOpacity(0.1),
+                                borderRadius: BorderRadius.circular(16),
+                              ),
+                              child: Text(
+                                item['category'],
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  color: colorPrimario,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 16),
+
+                            // Descripción
+                            Text(
+                              'Descripción',
                               style: TextStyle(
-                                fontSize: 24,
+                                fontSize: 16,
                                 fontWeight: FontWeight.bold,
                                 color: colorPrimario,
                               ),
                             ),
-                          ),
-                        );
-                      },
-                    ),
-                    const SizedBox(height: 8),
+                            const SizedBox(height: 8),
+                            Text(
+                              item['description'],
+                              style: TextStyle(
+                                fontSize: 14,
+                                color: Colors.grey[700],
+                                height: 1.5,
+                              ),
+                            ),
+                            const SizedBox(height: 20),
 
-                    // Categoría
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 6,
-                      ),
-                      decoration: BoxDecoration(
-                        color: colorPrimario.withOpacity(0.1),
-                        borderRadius: BorderRadius.circular(16),
-                      ),
-                      child: Text(
-                        item['category'],
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: colorPrimario,
-                          fontWeight: FontWeight.w500,
+                            // Precio con animación pulsante
+                            TweenAnimationBuilder<double>(
+                              duration: const Duration(milliseconds: 800),
+                              tween: Tween(begin: 0.0, end: 1.0),
+                              builder: (context, value, child) {
+                                return Transform.scale(
+                                  scale: 0.8 + (0.2 * value),
+                                  child: Opacity(
+                                    opacity: value,
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          'Precio: ',
+                                          style: TextStyle(
+                                            fontSize: 18,
+                                            color: Colors.grey[700],
+                                          ),
+                                        ),
+                                        AnimatedDefaultTextStyle(
+                                          duration: const Duration(milliseconds: 300),
+                                          style: TextStyle(
+                                            fontSize: 24,
+                                            fontWeight: FontWeight.bold,
+                                            color: colorNaranja,
+                                          ),
+                                          child: Text(
+                                            '\$${item['price'].toStringAsFixed(2)}',
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                );
+                              },
+                            ),
+                            const SizedBox(height: 12),
+                          ],
                         ),
                       ),
                     ),
-                    const SizedBox(height: 16),
 
-                    // Descripción
-                    Text(
-                      'Descripción',
-                      style: TextStyle(
-                        fontSize: 16,
-                        fontWeight: FontWeight.bold,
-                        color: colorPrimario,
-                      ),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      item['description'],
-                      style: TextStyle(
-                        fontSize: 14,
-                        color: Colors.grey[700],
-                        height: 1.5,
-                      ),
-                    ),
-                    const SizedBox(height: 20),
-
-                    // Precio con animación pulsante
-                    TweenAnimationBuilder<double>(
-                      duration: const Duration(milliseconds: 800),
-                      tween: Tween(begin: 0.0, end: 1.0),
-                      builder: (context, value, child) {
-                        return Transform.scale(
-                          scale: 0.8 + (0.2 * value),
-                          child: Opacity(
-                            opacity: value,
-                            child: Row(
-                              children: [
-                                Text(
-                                  'Precio: ',
-                                  style: TextStyle(
-                                    fontSize: 18,
-                                    color: Colors.grey[700],
-                                  ),
-                                ),
-                                AnimatedDefaultTextStyle(
-                                  duration: const Duration(milliseconds: 300),
-                                  style: TextStyle(
-                                    fontSize: 24,
-                                    fontWeight: FontWeight.bold,
-                                    color: colorNaranja,
-                                  ),
-                                  child: Text(
-                                    '\$${item['price'].toStringAsFixed(2)}',
-                                  ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        );
-                      },
-                    ),
-
-                    const Spacer(),
-
-                    // Botones de acción
+                    // Botones de acción (siempre visibles)
                     Row(
                       children: [
                         Expanded(
