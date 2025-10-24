@@ -88,9 +88,8 @@ class _MenuScreenState extends State<MenuScreen> {
           final double imageH = (totalH.isFinite && totalH > 0)
               ? totalH * 0.65
               : 140;
-          final double infoH = (totalH.isFinite && totalH > 0)
-              ? totalH - imageH
-              : 60;
+      // Eliminamos alto fijo para la sección de información para evitar
+      // pequeños desbordes por fracciones de pixel. Usaremos Expanded.
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -125,47 +124,53 @@ class _MenuScreenState extends State<MenuScreen> {
                   ),
                 ),
 
-                // Información
-                Container(
-                  height: infoH,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 8,
-                  ),
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Text(
-                        item['Platillo'] ?? item['name'] ?? 'Sin nombre',
-                        style: TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.bold,
-                          color: colorPrimario,
+                // Información (usa Expanded para ocupar el espacio restante)
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 10,
+                      vertical: 8,
+                    ),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      mainAxisSize: MainAxisSize.max,
+                      children: [
+                        Text(
+                          item['Platillo'] ?? item['name'] ?? 'Sin nombre',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.bold,
+                            color: colorPrimario,
+                          ),
+                          textAlign: TextAlign.center,
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
                         ),
-                        textAlign: TextAlign.center,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                      ),
-                      const SizedBox(height: 6),
-                      Text(
-                        '\$${(item['Precio'] ?? item['price'] ?? 0).toString()}',
-                        style: const TextStyle(
-                          fontSize: 13,
-                          color: Colors.green,
+                        const SizedBox(height: 4),
+                        Text(
+                          '\$${(item['Precio'] ?? item['price'] ?? 0).toString()}',
+                          style: const TextStyle(
+                            fontSize: 13,
+                            color: Colors.green,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        _estadoPlatillo(item['ID_Estado']),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: item['ID_Estado'] == 2
-                              ? Colors.green
-                              : Colors.red,
-                          fontWeight: FontWeight.w500,
+                        const SizedBox(height: 2),
+                        Flexible(
+                          child: Text(
+                            _estadoPlatillo(item['ID_Estado']),
+                            style: TextStyle(
+                              fontSize: 12,
+                              color: item['ID_Estado'] == 2
+                                  ? Colors.green
+                                  : Colors.red,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            textAlign: TextAlign.center,
+                            overflow: TextOverflow.ellipsis,
+                          ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
