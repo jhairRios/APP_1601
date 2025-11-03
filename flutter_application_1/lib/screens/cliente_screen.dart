@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../services/api_config.dart';
 import '../services/restaurante_service.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 import '../widgets/product_image_box.dart';
+import 'order_confirmation.dart';
 
 class ClienteScreen extends StatefulWidget {
   const ClienteScreen({super.key});
@@ -36,9 +40,7 @@ class _ClienteScreenState extends State<ClienteScreen>
   ];
 
   // Mock data para productos del menú
-  final List<Map<String, dynamic>> _menuItems = [
-
-  ];
+  final List<Map<String, dynamic>> _menuItems = [];
 
   // Cargar items del menú desde la API
   Future<void> _cargarMenuItems() async {
@@ -49,29 +51,45 @@ class _ClienteScreenState extends State<ClienteScreen>
       final mapped = items.map<Map<String, dynamic>>((raw) {
         try {
           final id = raw['ID_Menu'] ?? raw['id'] ?? raw['ID'] ?? '';
-          final platillo = raw['Platillo'] ?? raw['platillo'] ?? raw['name'] ?? '';
-          final descripcion = raw['Descripcion'] ?? raw['descripcion'] ?? raw['description'] ?? '';
+          final platillo =
+              raw['Platillo'] ?? raw['platillo'] ?? raw['name'] ?? '';
+          final descripcion =
+              raw['Descripcion'] ??
+              raw['descripcion'] ??
+              raw['description'] ??
+              '';
           final precio = raw['Precio'] ?? raw['precio'] ?? raw['price'] ?? 0;
           final imagen = raw['Imagen'] ?? raw['imagen'] ?? raw['image'] ?? '';
-          final categoria = raw['ID_Categoria'] ?? raw['IDcategoria'] ?? raw['category'] ?? 'Otros';
-          final estado = raw['ID_Estado'] ?? raw['IDestado'] ?? raw['estado'] ?? 1;
+          final categoria =
+              raw['ID_Categoria'] ??
+              raw['IDcategoria'] ??
+              raw['category'] ??
+              'Otros';
+          final estado =
+              raw['ID_Estado'] ?? raw['IDestado'] ?? raw['estado'] ?? 1;
 
           final mappedItem = {
             'id': id.toString(),
             'name': platillo.toString(),
             'description': descripcion.toString(),
-            'price': (precio is num) ? precio.toDouble() : double.tryParse(precio.toString()) ?? 0.0,
-          // Store only the normalized name (without extension); FlexibleImage will build the asset path.
-          'Imagen': (imagen == null || imagen.toString().trim().isEmpty)
-              ? ''
-              : _normalizeImageFilename(imagen.toString()),
-            'category': categoria is int ? _categoryFromId(categoria) : categoria.toString(),
+            'price': (precio is num)
+                ? precio.toDouble()
+                : double.tryParse(precio.toString()) ?? 0.0,
+            // Store only the normalized name (without extension); FlexibleImage will build the asset path.
+            'Imagen': (imagen == null || imagen.toString().trim().isEmpty)
+                ? ''
+                : _normalizeImageFilename(imagen.toString()),
+            'category': categoria is int
+                ? _categoryFromId(categoria)
+                : categoria.toString(),
             'available': estado == 1 || estado == '1',
           };
           // debug log
           assert(() {
             // ignore: avoid_print
-            print('[MenuLoad] mapped item id=${mappedItem['id']} Imagen=${mappedItem['Imagen']}');
+            print(
+              '[MenuLoad] mapped item id=${mappedItem['id']} Imagen=${mappedItem['Imagen']}',
+            );
             return true;
           }());
           return mappedItem;
@@ -151,10 +169,14 @@ class _ClienteScreenState extends State<ClienteScreen>
       if (!(ext == 'png' || ext == 'jpg' || ext == 'jpeg')) ext = 'png';
       // Normalizar a TitleCase por palabra y unir con underscore (para coincidir con assets)
       final parts = name.split(RegExp(r'[_\s]+'));
-      final titleParts = parts.map((p) {
-        if (p.isEmpty) return '';
-        return p[0].toUpperCase() + (p.length > 1 ? p.substring(1).toLowerCase() : '');
-      }).where((p) => p.isNotEmpty).toList();
+      final titleParts = parts
+          .map((p) {
+            if (p.isEmpty) return '';
+            return p[0].toUpperCase() +
+                (p.length > 1 ? p.substring(1).toLowerCase() : '');
+          })
+          .where((p) => p.isNotEmpty)
+          .toList();
       final normalized = titleParts.join('_');
       return '$normalized.$ext';
     } catch (e) {
@@ -301,11 +323,17 @@ class _ClienteScreenState extends State<ClienteScreen>
                 'logo': logoCtrl.text.trim(),
               };
 
-              Navigator.pop(context);
-              if (body['id'] == null || (body['id'] as String).isEmpty) {
-                await _crearRestaurante(body);
+              final resp = await RestauranteService.createRestaurante(body);
+              if (resp['success'] == true) {
+                await _cargarRestaurantes();
+                Navigator.pop(context);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Restaurante creado')),
+                );
               } else {
-                await _actualizarRestaurante(body);
+                ScaffoldMessenger.of(context).showSnackBar(
+                  SnackBar(content: Text(resp['message'] ?? 'Error')),
+                );
               }
             },
             child: const Text('Guardar'),
@@ -313,20 +341,6 @@ class _ClienteScreenState extends State<ClienteScreen>
         ],
       ),
     );
-  }
-
-  Future<void> _crearRestaurante(Map<String, dynamic> body) async {
-    final resp = await RestauranteService.createRestaurante(body);
-    if (resp['success'] == true) {
-      await _cargarRestaurantes();
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(const SnackBar(content: Text('Restaurante creado')));
-    } else {
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text(resp['message'] ?? 'Error')));
-    }
   }
 
   Future<void> _actualizarRestaurante(Map<String, dynamic> body) async {
@@ -929,7 +943,10 @@ class _ClienteScreenState extends State<ClienteScreen>
               height: 50,
               child: ElevatedButton(
                 onPressed: () {
-                  // Realizar pedido
+                  // Abrir modal para pedir ubicación y teléfono antes de enviar el pedido
+                  final subtotal = total;
+                  final envio = 15.0;
+                  _showLocationModal(subtotal + envio);
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorVerde,
@@ -998,6 +1015,195 @@ class _ClienteScreenState extends State<ClienteScreen>
           ),
         ],
       ),
+    );
+  }
+
+  // Modal que solicita ubicación y teléfono, luego envía el pedido al servidor
+  Future<void> _showLocationModal(double totalConEnvio) async {
+    final direccionCtrl = TextEditingController();
+    final telefonoCtrl = TextEditingController();
+    bool loading = false;
+
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: EdgeInsets.only(
+                bottom: MediaQuery.of(context).viewInsets.bottom,
+              ),
+              child: Container(
+                padding: const EdgeInsets.all(16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'Confirmar Pedido',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    Text('Total: \$${totalConEnvio.toStringAsFixed(2)}'),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: direccionCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Dirección de entrega',
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: telefonoCtrl,
+                      decoration: const InputDecoration(
+                        labelText: 'Teléfono (opcional)',
+                      ),
+                      keyboardType: TextInputType.phone,
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: () {
+                            Navigator.of(context).pop();
+                          },
+                          child: const Text('Cancelar'),
+                        ),
+                        const SizedBox(width: 8),
+                        ElevatedButton(
+                          onPressed: loading
+                              ? null
+                              : () async {
+                                  final ubicacion = direccionCtrl.text.trim();
+                                  final telefono = telefonoCtrl.text.trim();
+                                  if (ubicacion.isEmpty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text(
+                                          'Por favor ingresa la dirección',
+                                        ),
+                                      ),
+                                    );
+                                    return;
+                                  }
+                                  setModalState(() {
+                                    loading = true;
+                                  });
+
+                                  // Construir items simples desde _cartItems
+                                  final itemsPayload = _cartItems
+                                      .map(
+                                        (it) => {
+                                          'id': it['id'],
+                                          'name': it['name'],
+                                          'price': it['price'],
+                                          'quantity': it['quantity'],
+                                        },
+                                      )
+                                      .toList();
+
+                                  final payload = {
+                                    'action': 'create_order',
+                                    'total': (totalConEnvio),
+                                    'ubicacion': ubicacion,
+                                    'telefono': telefono,
+                                    'items': itemsPayload,
+                                    'user_id': null,
+                                  };
+
+                                  try {
+                                    final resp = await http.post(
+                                      Uri.parse(API_BASE_URL),
+                                      headers: {
+                                        'Content-Type': 'application/json',
+                                      },
+                                      body: json.encode(payload),
+                                    );
+                                    final decoded = resp.statusCode == 200
+                                        ? json.decode(resp.body)
+                                        : null;
+                                    if (decoded != null &&
+                                        decoded['success'] == true) {
+                                      final orderId =
+                                          decoded['order_id'] ??
+                                          decoded['orderId'] ??
+                                          null;
+                                      // Cerrar modal
+                                      Navigator.of(context).pop();
+                                      // Guardar valores antes de limpiar carrito
+                                      final confirmedItems = List<dynamic>.from(
+                                        itemsPayload,
+                                      );
+                                      final confirmedTotal = totalConEnvio;
+                                      final confirmedUbicacion = ubicacion;
+                                      final confirmedTelefono = telefono;
+
+                                      setState(() {
+                                        _cartItems.clear();
+                                        _cartCount = 0;
+                                      });
+
+                                      // Navegar a pantalla de confirmación usando el context del State
+                                      Navigator.of(this.context).push(
+                                        MaterialPageRoute(
+                                          builder: (_) =>
+                                              OrderConfirmationScreen(
+                                                orderId: orderId,
+                                                items: confirmedItems,
+                                                total: confirmedTotal,
+                                                ubicacion: confirmedUbicacion,
+                                                telefono: confirmedTelefono,
+                                              ),
+                                        ),
+                                      );
+                                    } else {
+                                      final msg =
+                                          decoded != null &&
+                                              decoded['message'] != null
+                                          ? decoded['message']
+                                          : 'Error creando pedido';
+                                      ScaffoldMessenger.of(
+                                        context,
+                                      ).showSnackBar(
+                                        SnackBar(content: Text(msg)),
+                                      );
+                                    }
+                                  } catch (e) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text('Error de red: $e'),
+                                      ),
+                                    );
+                                  } finally {
+                                    setModalState(() {
+                                      loading = false;
+                                    });
+                                  }
+                                },
+                          child: loading
+                              ? const SizedBox(
+                                  width: 16,
+                                  height: 16,
+                                  child: CircularProgressIndicator(
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Text('Confirmar'),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1135,7 +1341,7 @@ class _ClienteScreenState extends State<ClienteScreen>
         duration: const Duration(milliseconds: 500),
         vsync: this,
       ),
-  builder: (context) => AnimatedContainer(
+      builder: (context) => AnimatedContainer(
         duration: const Duration(milliseconds: 300),
         height: MediaQuery.of(context).size.height * 0.7,
         decoration: const BoxDecoration(
@@ -1291,7 +1497,9 @@ class _ClienteScreenState extends State<ClienteScreen>
                                           ),
                                         ),
                                         AnimatedDefaultTextStyle(
-                                          duration: const Duration(milliseconds: 300),
+                                          duration: const Duration(
+                                            milliseconds: 300,
+                                          ),
                                           style: TextStyle(
                                             fontSize: 24,
                                             fontWeight: FontWeight.bold,
@@ -1419,7 +1627,7 @@ class _ClienteScreenState extends State<ClienteScreen>
               color: Colors.grey[200],
               borderRadius: BorderRadius.circular(8),
             ),
-              child: ClipRRect(
+            child: ClipRRect(
               borderRadius: BorderRadius.circular(8),
               child: FlexibleImage(
                 source: item['image'] ?? item['Imagen'],

@@ -427,6 +427,221 @@ try {
         exit;
     }
 
+    // ----------------------- CREAR PEDIDO -----------------------
+    if ($action === 'create_order') {
+        $total = $input_data['total'] ?? 0;
+        $ubicacion = $input_data['ubicacion'] ?? null;
+        $telefono = $input_data['telefono'] ?? null;
+        $items = $input_data['items'] ?? [];
+        $user_id = isset($input_data['user_id']) ? $input_data['user_id'] : null;
+
+        // Validaciones básicas
+        if (empty($items) || !is_array($items) || trim((string)$ubicacion) === '') {
+            echo json_encode(['success' => false, 'message' => 'Items y ubicación son requeridos']);
+            exit;
+        }
+
+        try {
+            error_log('create_order: begin transaction');
+            $pdo->beginTransaction();
+
+            // Insertar un único pedido que representa la orden completa
+            // Intentaremos guardar el primer ID_Menu en la columna Platillo para compatibilidad,
+            // pero consultaremos primero las columnas reales de la tabla `pedidos` para evitar errores
+            $firstMenuId = null;
+            if (isset($items[0])) {
+                $firstMenuId = $items[0]['id'] ?? ($items[0]['ID_Menu'] ?? null);
+            }
+
+            // Obtener columnas existentes en la tabla pedidos
+            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
+            $colsStmt->execute([$dbname]);
+            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+            $colsLower = array_map('strtolower', $cols);
+
+            // Determinar nombre de la columna de usuario (si existe)
+            $possibleUserCols = ['id_usuarios', 'id_usuario', 'id_Usuario', 'Id_Usuario', 'Id_Usuarios'];
+            $userCol = null;
+            foreach ($possibleUserCols as $c) {
+                if (in_array(strtolower($c), $colsLower)) {
+                    // recuperar la forma original con mayúsculas si está en $cols
+                    foreach ($cols as $original) {
+                        if (strtolower($original) === strtolower($c)) { $userCol = $original; break; }
+                    }
+                    if ($userCol === null) $userCol = $c;
+                    break;
+                }
+            }
+
+            // Determinar si la columna Platillo existe
+            $platilloCol = null;
+            foreach ($cols as $c) {
+                if (strtolower($c) === 'platillo') { $platilloCol = $c; break; }
+            }
+
+            // Construir INSERT dinámico según columnas disponibles
+            $fields = [];
+            $placeholders = [];
+            $values = [];
+
+            if ($platilloCol !== null) {
+                $fields[] = $platilloCol;
+                $placeholders[] = '?';
+                $values[] = $firstMenuId;
+            }
+            if ($userCol !== null) {
+                $fields[] = $userCol;
+                $placeholders[] = '?';
+                $values[] = $user_id === null ? null : $user_id;
+            }
+            // Total y Ubicacion (esperadas)
+            if (in_array('Total', $cols, true) || in_array('total', $colsLower, true)) {
+                // buscar nombre original si existe
+                $totalCol = null;
+                foreach ($cols as $c) { if (strtolower($c) === 'total') { $totalCol = $c; break; } }
+                $fields[] = $totalCol ?? 'Total';
+                $placeholders[] = '?';
+                $values[] = $total;
+            } else {
+                // Si no existe Total, seguimos pero con riesgo; añadimos anyway
+                $fields[] = 'Total'; $placeholders[] = '?'; $values[] = $total;
+            }
+            if (in_array('Ubicacion', $cols, true) || in_array('ubicacion', $colsLower, true)) {
+                $ubicCol = null; foreach ($cols as $c) { if (strtolower($c) === 'ubicacion') { $ubicCol = $c; break; } }
+                $fields[] = $ubicCol ?? 'Ubicacion';
+                $placeholders[] = '?';
+                $values[] = $ubicacion;
+            } else {
+                $fields[] = 'Ubicacion'; $placeholders[] = '?'; $values[] = $ubicacion;
+            }
+            // Telefono en la tabla pedidos si está disponible
+            if (in_array('Telefono', $cols, true) || in_array('telefono', $colsLower, true)) {
+                $telCol = null; foreach ($cols as $c) { if (strtolower($c) === 'telefono') { $telCol = $c; break; } }
+                $fields[] = $telCol ?? 'Telefono';
+                $placeholders[] = '?';
+                $values[] = $telefono;
+            }
+
+            $sql = "INSERT INTO pedidos (" . implode(', ', $fields) . ") VALUES (" . implode(', ', $placeholders) . ")";
+            try {
+                $stmtPedido = $pdo->prepare($sql);
+                $stmtPedido->execute($values);
+                $orderId = $pdo->lastInsertId();
+                error_log('create_order: inserted pedidos id=' . $orderId . ' sql=' . $sql);
+            } catch (PDOException $e) {
+                error_log('create_order: insert pedidos failed: ' . $e->getMessage() . ' sql=' . $sql);
+                throw $e; // subir el error para que el catch externo haga rollback
+            }
+
+            // No insertar en detalle_pedido porque esa tabla no existe en este esquema;
+            // la dirección y teléfono se almacenaron directamente en la tabla `pedidos` cuando existe la columna.
+
+            // Preparar inserción en Platillos_Pedido (tabla existente en tu esquema)
+            // La tabla parece no tener AUTO_INCREMENT en la PK; para evitar 'Duplicate entry 0' asignamos
+            // manualmente IDs únicos dentro de la transacción usando SELECT MAX(...) FOR UPDATE.
+            try {
+                $maxStmt = $pdo->prepare("SELECT COALESCE(MAX(ID_Platillos_Pedido), 0) AS maxid FROM Platillos_Pedido FOR UPDATE");
+                $maxStmt->execute();
+                $rowMax = $maxStmt->fetch(PDO::FETCH_ASSOC);
+                $nextId = intval($rowMax['maxid']);
+            } catch (PDOException $e) {
+                // Si falla la lectura del max, fallback a 0 (no ideal, pero evitamos abortar la orden completa)
+                error_log('create_order: warning could not lock Platillos_Pedido for id allocation: ' . $e->getMessage());
+                $nextId = 0;
+            }
+
+            $stmtItem = $pdo->prepare("INSERT INTO Platillos_Pedido (ID_Platillos_Pedido, Nombre_Platillo, Cantidad, Precio, ID_Pedido, ID_Menu) VALUES (?, ?, ?, ?, ?, ?)");
+            foreach ($items as $it) {
+                $idMenu = $it['id'] ?? ($it['ID_Menu'] ?? null);
+                $cantidad = intval($it['quantity'] ?? ($it['cantidad'] ?? 1));
+                $precio = floatval($it['price'] ?? 0);
+                $nombre = $it['name'] ?? ($it['Nombre_Platillo'] ?? '');
+
+                // Asignar ID único
+                $nextId++;
+
+                if ($idMenu === null) {
+                    $stmtItem->execute([$nextId, $nombre, $cantidad, $precio, $orderId, null]);
+                } else {
+                    $stmtItem->execute([$nextId, $nombre, $cantidad, $precio, $orderId, $idMenu]);
+                }
+                error_log('create_order: inserted Platillos_Pedido item id=' . $nextId . ' name=' . $nombre . ' qty=' . $cantidad);
+            }
+
+            $pdo->commit();
+            error_log('create_order: commit successful for order id=' . $orderId);
+            echo json_encode(['success' => true, 'message' => 'Pedido creado', 'order_id' => $orderId]);
+        } catch (PDOException $e) {
+            if ($pdo->inTransaction()) $pdo->rollBack();
+            error_log('create_order: error ' . $e->getMessage());
+            echo json_encode(['success' => false, 'message' => 'Error creando pedido: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
+    // ----------------------- OBTENER DETALLE DE PEDIDO -----------------------
+    if ($action === 'get_order_detail') {
+        $orderId = $input_data['order_id'] ?? $input_data['id'] ?? null;
+        if (empty($orderId)) {
+            echo json_encode(['success' => false, 'message' => 'order_id requerido']);
+            exit;
+        }
+
+        try {
+            // Obtener columnas reales de la tabla pedidos para localizar la columna ID
+            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
+            $colsStmt->execute([$dbname]);
+            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+
+            $idCol = null;
+            // Buscar una columna que sea claramente el id del pedido
+            foreach ($cols as $c) {
+                $low = strtolower($c);
+                if ($low === 'id_pedido' || $low === 'idpedidos' || $low === 'id' || $low === 'id_pedidos') { $idCol = $c; break; }
+            }
+            if ($idCol === null) {
+                foreach ($cols as $c) {
+                    $low = strtolower($c);
+                    if (strpos($low, 'pedido') !== false && strpos($low, 'id') !== false) { $idCol = $c; break; }
+                }
+            }
+            if ($idCol === null && count($cols) > 0) $idCol = $cols[0]; // fallback
+
+            // Consultar el pedido
+            $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$idCol} = ? LIMIT 1");
+            $stmt->execute([$orderId]);
+            $pedido = $stmt->fetch(PDO::FETCH_ASSOC);
+            if (!$pedido) {
+                echo json_encode(['success' => false, 'message' => 'Pedido no encontrado']);
+                exit;
+            }
+
+            // Obtener items desde Platillos_Pedido; localizar la columna FK hacia pedidos
+            $colsItemStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'Platillos_Pedido'");
+            $colsItemStmt->execute([$dbname]);
+            $itemCols = $colsItemStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+            $itemIdCol = null;
+            foreach ($itemCols as $c) {
+                if (strtolower($c) === 'id_pedido') { $itemIdCol = $c; break; }
+            }
+            if ($itemIdCol === null) {
+                foreach ($itemCols as $c) {
+                    if (strpos(strtolower($c), 'pedido') !== false) { $itemIdCol = $c; break; }
+                }
+            }
+            if ($itemIdCol === null) $itemIdCol = 'ID_Pedido';
+
+            $stmtItems = $pdo->prepare("SELECT * FROM Platillos_Pedido WHERE {$itemIdCol} = ?");
+            $stmtItems->execute([$orderId]);
+            $items = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
+
+            echo json_encode(['success' => true, 'pedido' => $pedido, 'items' => $items]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Error obteniendo detalle: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     if ($action === 'update_restaurante') {
         $id = $input_data['id'] ?? '';
         $nombre = $input_data['nombre'] ?? '';
