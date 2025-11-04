@@ -625,8 +625,27 @@ try {
 
     if ($action === 'get_repartidor_orders') {
         $repartidor_id = $input_data['repartidor_id'] ?? null;
-        if (empty($repartidor_id)) { echo json_encode(['success' => false, 'message' => 'repartidor_id requerido']); exit; }
+        if ($repartidor_id === null || $repartidor_id === '') { echo json_encode(['success' => false, 'message' => 'repartidor_id requerido']); exit; }
         try {
+            // Mapear el ID proporcionado: puede ser ID_Repartidor o ID_Usuario. Queremos obtener el ID_Repartidor real.
+            $provided = is_numeric($repartidor_id) ? intval($repartidor_id) : $repartidor_id;
+            $targetRepId = null;
+            try {
+                $chk = $pdo->prepare("SELECT ID_Repartidor, ID_Usuario FROM repartidor WHERE ID_Repartidor = ? LIMIT 1");
+                $chk->execute([$provided]);
+                $r = $chk->fetch(PDO::FETCH_ASSOC);
+                if ($r) $targetRepId = $r['ID_Repartidor'];
+                else {
+                    $chk2 = $pdo->prepare("SELECT ID_Repartidor, ID_Usuario FROM repartidor WHERE ID_Usuario = ? LIMIT 1");
+                    $chk2->execute([$provided]);
+                    $r2 = $chk2->fetch(PDO::FETCH_ASSOC);
+                    if ($r2) $targetRepId = $r2['ID_Repartidor'];
+                }
+            } catch (PDOException $e) {
+                // Si la tabla repartidor no existe, fallamos con mensaje claro
+                error_log('get_repartidor_orders: error consultando repartidor mapping: ' . $e->getMessage());
+            }
+
             $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
             $colsStmt->execute([$dbname]);
             $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
@@ -640,8 +659,14 @@ try {
             foreach ($cols as $c) { if (in_array(strtolower($c), ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) { $repartidorCol = $c; break; } }
 
             if ($repartidorCol !== null) {
-                $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$repartidorCol} = ? ORDER BY {$idCol} DESC");
-                $stmt->execute([$repartidor_id]);
+                if ($targetRepId !== null) {
+                    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$repartidorCol} = ? ORDER BY {$idCol} DESC");
+                    $stmt->execute([$targetRepId]);
+                } else {
+                    // No encontramos mapping; devolver vacío en lugar de intentar con el valor proporcionado
+                    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE 1=0");
+                    $stmt->execute();
+                }
             } else {
                 // Si no hay columna repartidor, devolver vacio (no podemos filtrar)
                 $stmt = $pdo->prepare("SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 200");
@@ -658,7 +683,7 @@ try {
     if ($action === 'assign_order') {
         $order_id = $input_data['order_id'] ?? null;
         $repartidor_id = $input_data['repartidor_id'] ?? null;
-        if (empty($order_id) || empty($repartidor_id)) { echo json_encode(['success' => false, 'message' => 'order_id y repartidor_id requeridos']); exit; }
+        if (empty($order_id) || $repartidor_id === null || $repartidor_id === '') { echo json_encode(['success' => false, 'message' => 'order_id y repartidor_id requeridos']); exit; }
         try {
             $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
             $colsStmt->execute([$dbname]);
@@ -668,13 +693,47 @@ try {
             if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
             if ($repartidorCol === null) { echo json_encode(['success' => false, 'message' => 'Tabla pedidos no tiene columna para asignar repartidor']); exit; }
 
+            // Normalizar el ID proporcionado
+            $providedId = is_numeric($repartidor_id) ? intval($repartidor_id) : $repartidor_id;
+
+            // Intentar mapear el valor proporcionado a un ID_Repartidor válido en la tabla `repartidor`.
+            $targetRepId = null;
+            try {
+                // 1) ¿es el valor directamente un ID_Repartidor?
+                $chk = $pdo->prepare("SELECT ID_Repartidor, ID_Usuario FROM repartidor WHERE ID_Repartidor = ? LIMIT 1");
+                $chk->execute([$providedId]);
+                $r = $chk->fetch(PDO::FETCH_ASSOC);
+                if ($r) {
+                    $targetRepId = $r['ID_Repartidor'];
+                } else {
+                    // 2) ¿es el valor un Id_Usuario vinculado en la tabla repartidor?
+                    $chk2 = $pdo->prepare("SELECT ID_Repartidor, ID_Usuario FROM repartidor WHERE ID_Usuario = ? LIMIT 1");
+                    $chk2->execute([$providedId]);
+                    $r2 = $chk2->fetch(PDO::FETCH_ASSOC);
+                    if ($r2) {
+                        $targetRepId = $r2['ID_Repartidor'];
+                    }
+                }
+            } catch (PDOException $e) {
+                // Si la tabla repartidor no existe o hay otro error, lo registramos y fallamos con mensaje claro
+                error_log('assign_order: error consultando repartidor mapping: ' . $e->getMessage());
+                echo json_encode(['success' => false, 'message' => 'Error consultando repartidor: ' . $e->getMessage()]);
+                exit;
+            }
+
+            if ($targetRepId === null) {
+                echo json_encode(['success' => false, 'message' => 'No se encontró un registro de repartidor para el ID proporcionado (' . $providedId . '). Asegúrate que exista un registro en `repartidor` o que el ID corresponda a la columna `ID_Usuario` mapeada.']);
+                exit;
+            }
+
+            // Ejecutar la actualización usando el ID_Repartidor real encontrado
             $sql = "UPDATE pedidos SET {$repartidorCol} = ?";
-            $params = [$repartidor_id];
+            $params = [$targetRepId];
             if ($estadoCol !== null) { $sql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
             $sql .= " WHERE {$idCol} = ?"; $params[] = $order_id;
             $stmt = $pdo->prepare($sql);
             $stmt->execute($params);
-            if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Pedido asignado']);
+            if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Pedido asignado', 'repartidor_used' => $targetRepId]);
             else echo json_encode(['success' => false, 'message' => 'No se actualizó el pedido (id inexistente o sin cambios)']);
         } catch (PDOException $e) { echo json_encode(['success' => false, 'message' => 'Error asignando pedido: ' . $e->getMessage()]); }
         exit;
@@ -784,7 +843,7 @@ try {
             if ($action === 'assign_order') {
                 $order_id = $input_data['order_id'] ?? null;
                 $repartidor_id = $input_data['repartidor_id'] ?? null;
-                if (empty($order_id) || empty($repartidor_id)) { echo json_encode(['success' => false, 'message' => 'order_id y repartidor_id requeridos']); exit; }
+                if (empty($order_id) || $repartidor_id === null || $repartidor_id === '') { echo json_encode(['success' => false, 'message' => 'order_id y repartidor_id requeridos']); exit; }
                 try {
                     $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
                     $colsStmt->execute([$dbname]);
@@ -794,13 +853,47 @@ try {
                     if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
                     if ($repartidorCol === null) { echo json_encode(['success' => false, 'message' => 'Tabla pedidos no tiene columna para asignar repartidor']); exit; }
 
+                    // Normalizar el ID proporcionado
+                    $providedId = is_numeric($repartidor_id) ? intval($repartidor_id) : $repartidor_id;
+
+                    // Intentar mapear el valor proporcionado a un ID_Repartidor válido en la tabla `repartidor`.
+                    $targetRepId = null;
+                    try {
+                        // 1) ¿es el valor directamente un ID_Repartidor?
+                        $chk = $pdo->prepare("SELECT ID_Repartidor, ID_Usuario FROM repartidor WHERE ID_Repartidor = ? LIMIT 1");
+                        $chk->execute([$providedId]);
+                        $r = $chk->fetch(PDO::FETCH_ASSOC);
+                        if ($r) {
+                            $targetRepId = $r['ID_Repartidor'];
+                        } else {
+                            // 2) ¿es el valor un Id_Usuario vinculado en la tabla repartidor?
+                            $chk2 = $pdo->prepare("SELECT ID_Repartidor, ID_Usuario FROM repartidor WHERE ID_Usuario = ? LIMIT 1");
+                            $chk2->execute([$providedId]);
+                            $r2 = $chk2->fetch(PDO::FETCH_ASSOC);
+                            if ($r2) {
+                                $targetRepId = $r2['ID_Repartidor'];
+                            }
+                        }
+                    } catch (PDOException $e) {
+                        // Si la tabla repartidor no existe o hay otro error, lo registramos y fallamos con mensaje claro
+                        error_log('assign_order: error consultando repartidor mapping: ' . $e->getMessage());
+                        echo json_encode(['success' => false, 'message' => 'Error consultando repartidor: ' . $e->getMessage()]);
+                        exit;
+                    }
+
+                    if ($targetRepId === null) {
+                        echo json_encode(['success' => false, 'message' => 'No se encontró un registro de repartidor para el ID proporcionado (' . $providedId . '). Asegúrate que exista un registro en `repartidor` o que el ID corresponda a la columna `ID_Usuario` mapeada.']);
+                        exit;
+                    }
+
+                    // Ejecutar la actualización usando el ID_Repartidor real encontrado
                     $sql = "UPDATE pedidos SET {$repartidorCol} = ?";
-                    $params = [$repartidor_id];
+                    $params = [$targetRepId];
                     if ($estadoCol !== null) { $sql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
                     $sql .= " WHERE {$idCol} = ?"; $params[] = $order_id;
                     $stmt = $pdo->prepare($sql);
                     $stmt->execute($params);
-                    if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Pedido asignado']);
+                    if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Pedido asignado', 'repartidor_used' => $targetRepId]);
                     else echo json_encode(['success' => false, 'message' => 'No se actualizó el pedido (id inexistente o sin cambios)']);
                 } catch (PDOException $e) { echo json_encode(['success' => false, 'message' => 'Error asignando pedido: ' . $e->getMessage()]); }
                 exit;
