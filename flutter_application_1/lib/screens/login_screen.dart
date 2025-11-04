@@ -2,9 +2,10 @@ import 'package:flutter/material.dart';
 import '../widgets/flexible_image.dart';
 import 'package:flutter/services.dart'; // ✅ Para copiar al portapapeles
 import 'package:http/http.dart'
-  as http; // ✅ Importamos http para hacer peticiones a la API
+    as http; // ✅ Importamos http para hacer peticiones a la API
 import 'dart:convert'; // ✅ Para convertir JSON
 import '../services/api_config.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -712,6 +713,21 @@ class _LoginScreenState extends State<LoginScreen> {
         // ✅ LOGIN EXITOSO: Obtener el rol del usuario
         final userRole = data['user']['role_id'];
         final userName = data['user']['name'];
+
+        // Guardar user id / repartidor id en SharedPreferences para sesiones
+        try {
+          final prefs = await SharedPreferences.getInstance();
+          final userId = data['user']['id']?.toString() ?? '';
+          if (userId.isNotEmpty) {
+            await prefs.setString('user_id', userId);
+            if (userRole == 3) {
+              // Si el usuario es repartidor, también guardar repartidor_id
+              await prefs.setString('repartidor_id', userId);
+            }
+          }
+        } catch (_) {
+          // no bloquear el login si falla el guardado local
+        }
 
         // ✅ REDIRECCIÓN: Usar función reutilizable
         _redirectByRole(userRole, userName);

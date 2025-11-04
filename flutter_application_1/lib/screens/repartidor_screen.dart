@@ -1,5 +1,10 @@
 import 'package:flutter/material.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import 'dart:math' as math;
+import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/flexible_image.dart';
+import '../services/api_config.dart';
 
 class RepartidorScreen extends StatefulWidget {
   const RepartidorScreen({super.key});
@@ -10,6 +15,16 @@ class RepartidorScreen extends StatefulWidget {
 
 class _RepartidorScreenState extends State<RepartidorScreen> {
   int _selectedIndex = 0;
+  // Estados para pedidos
+  List<Map<String, dynamic>> _pendingOrders = [];
+  List<Map<String, dynamic>> _myOrders = [];
+  bool _loadingPending = false;
+  bool _loadingMy = false;
+  String? _pendingError;
+  String? _myError;
+  String? _myRawResponse;
+  String? _pendingRawResponse;
+  String? _currentRepartidorId;
 
   @override
   Widget build(BuildContext context) {
@@ -54,9 +69,19 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               ),
             ),
             const SizedBox(width: 12),
-            const Text(
-              'Panel Repartidor',
-              style: TextStyle(fontWeight: FontWeight.bold),
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'Panel Repartidor',
+                  style: TextStyle(fontWeight: FontWeight.bold),
+                ),
+                if (_currentRepartidorId != null)
+                  Text(
+                    'ID: ${_currentRepartidorId}',
+                    style: const TextStyle(fontSize: 12),
+                  ),
+              ],
             ),
           ],
         ),
@@ -200,7 +225,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               Expanded(
                 child: _buildStatCard(
                   'Entregas Hoy',
-                  '5',
+                  '${_myOrders.length}',
                   Icons.delivery_dining,
                   colorVerde,
                 ),
@@ -209,7 +234,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               Expanded(
                 child: _buildStatCard(
                   'Pendientes',
-                  '3',
+                  '${_pendingOrders.length}',
                   Icons.pending,
                   colorNaranja,
                 ),
@@ -288,6 +313,23 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     );
   }
 
+  @override
+  void initState() {
+    super.initState();
+    // cargar listas
+    _loadPendingOrders();
+    _loadMyOrders();
+    // cargar id de repartidor (si existe)
+    _loadRepartidorId();
+  }
+
+  Future<void> _loadRepartidorId() async {
+    final id = await _getRepartidorId();
+    setState(() {
+      _currentRepartidorId = id;
+    });
+  }
+
   // ✅ PEDIDOS PENDIENTES/SIN ASIGNAR
   Widget _buildPedidosPendientes(Color colorPrimario, Color colorNaranja) {
     return SingleChildScrollView(
@@ -318,7 +360,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
                   border: Border.all(color: colorNaranja.withOpacity(0.3)),
                 ),
                 child: Text(
-                  '8 disponibles',
+                  '${_pendingOrders.length} disponibles',
                   style: TextStyle(
                     color: colorNaranja,
                     fontSize: 12,
@@ -338,23 +380,88 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
           const SizedBox(height: 20),
 
           // Lista de pedidos pendientes
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 8,
-            itemBuilder: (context, index) {
-              return _buildPendingOrderCard(
-                'Pedido #${3000 + index}',
-                'Restaurante ${(index % 3) + 1}',
-                'Calle ${index + 1} #${(index + 1) * 10}',
-                '${(index + 1) * 2.5} km',
-                '\$${(index + 1) * 8}.00',
-                colorPrimario,
-                colorNaranja,
-                index,
-              );
-            },
-          ),
+          if (_loadingPending)
+            const Center(child: CircularProgressIndicator())
+          else if (_pendingOrders.isEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_pendingError ?? 'No hay pedidos pendientes'),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _loadPendingOrders,
+                  child: const Text('Refrescar'),
+                ),
+                if (_pendingRawResponse != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Respuesta servidor (preview):',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _pendingRawResponse!.length > 800
+                          ? _pendingRawResponse!.substring(
+                                  0,
+                                  math.min(800, _pendingRawResponse!.length),
+                                ) +
+                                '...'
+                          : _pendingRawResponse!,
+                      style: TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ],
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _pendingOrders.length,
+              itemBuilder: (context, index) {
+                final o = _pendingOrders[index];
+                final orderId =
+                    o['ID_Pedidos'] ??
+                    o['ID_Pedido'] ??
+                    o['Id_Pedido'] ??
+                    o['id'] ??
+                    o['order_id'] ??
+                    o['orderId'] ??
+                    o['ID'] ??
+                    '';
+                final restaurant =
+                    o['Restaurante'] ??
+                    o['restaurante'] ??
+                    o['nombre_restaurante'] ??
+                    'Restaurante';
+                final address =
+                    o['Ubicacion'] ??
+                    o['ubicacion'] ??
+                    o['Direccion'] ??
+                    o['direccion'] ??
+                    '';
+                final distance = o['distancia'] ?? '';
+                final payment =
+                    o['Total'] ?? o['total'] ?? o['monto'] ?? '\$0.00';
+                return _buildPendingOrderCard(
+                  'Pedido #${orderId}',
+                  restaurant.toString(),
+                  address.toString(),
+                  distance.toString(),
+                  payment.toString(),
+                  colorPrimario,
+                  colorNaranja,
+                  index,
+                  orderId: orderId.toString(),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -390,7 +497,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
                   border: Border.all(color: colorVerde.withOpacity(0.3)),
                 ),
                 child: Text(
-                  '3 asignados',
+                  '${_myOrders.length} asignados',
                   style: TextStyle(
                     color: colorVerde,
                     fontSize: 12,
@@ -410,24 +517,88 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
           const SizedBox(height: 20),
 
           // Lista de mis pedidos
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 3,
-            itemBuilder: (context, index) {
-              return _buildMyOrderCard(
-                'Pedido #${4000 + index}',
-                'Cliente ${index + 1}',
-                'Av. Principal ${(index + 1) * 100}',
-                _getOrderStatus(index),
-                '${(index + 1) * 1.8} km',
-                '\$${(index + 1) * 12}.50',
-                colorPrimario,
-                colorVerde,
-                index,
-              );
-            },
-          ),
+          if (_loadingMy)
+            const Center(child: CircularProgressIndicator())
+          else if (_myOrders.isEmpty)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(_myError ?? 'No tienes pedidos asignados'),
+                const SizedBox(height: 8),
+                ElevatedButton(
+                  onPressed: _loadMyOrders,
+                  child: const Text('Refrescar'),
+                ),
+                if (_myRawResponse != null) ...[
+                  const SizedBox(height: 12),
+                  Text(
+                    'Respuesta servidor (preview):',
+                    style: TextStyle(fontWeight: FontWeight.w600),
+                  ),
+                  const SizedBox(height: 6),
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.black12,
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Text(
+                      _myRawResponse!.length > 800
+                          ? _myRawResponse!.substring(
+                                  0,
+                                  math.min(800, _myRawResponse!.length),
+                                ) +
+                                '...'
+                          : _myRawResponse!,
+                      style: TextStyle(fontSize: 12, color: Colors.black87),
+                    ),
+                  ),
+                ],
+              ],
+            )
+          else
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: _myOrders.length,
+              itemBuilder: (context, index) {
+                final o = _myOrders[index];
+                final orderId =
+                    o['ID_Pedidos'] ??
+                    o['ID_Pedido'] ??
+                    o['Id_Pedido'] ??
+                    o['id'] ??
+                    o['order_id'] ??
+                    o['orderId'] ??
+                    o['ID'] ??
+                    '';
+                final cliente =
+                    o['Cliente'] ?? o['cliente'] ?? o['Nombre'] ?? 'Cliente';
+                final address =
+                    o['Ubicacion'] ??
+                    o['ubicacion'] ??
+                    o['Direccion'] ??
+                    o['direccion'] ??
+                    '';
+                final status =
+                    o['Estado'] ?? o['estado'] ?? o['status'] ?? 'Asignado';
+                final distance = o['distancia'] ?? '';
+                final payment =
+                    o['Total'] ?? o['total'] ?? o['monto'] ?? '\$0.00';
+                return _buildMyOrderCard(
+                  'Pedido #${orderId}',
+                  cliente.toString(),
+                  address.toString(),
+                  status.toString(),
+                  distance.toString(),
+                  payment.toString(),
+                  colorPrimario,
+                  colorVerde,
+                  index,
+                  orderId: orderId.toString(),
+                );
+              },
+            ),
         ],
       ),
     );
@@ -594,8 +765,9 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     String payment,
     Color colorPrimario,
     Color colorNaranja,
-    int index,
-  ) {
+    int index, {
+    String? orderId,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -659,9 +831,11 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
           SizedBox(
             width: double.infinity,
             child: ElevatedButton(
-              onPressed: () {
-                // Tomar pedido
-              },
+              onPressed: orderId == null
+                  ? null
+                  : () async {
+                      await _assignOrder(orderId);
+                    },
               style: ElevatedButton.styleFrom(
                 backgroundColor: colorNaranja,
                 foregroundColor: Colors.white,
@@ -677,6 +851,229 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     );
   }
 
+  // ------------------ Llamadas a API y helpers ------------------
+  Future<String?> _getRepartidorId() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final id = prefs.getString('repartidor_id') ?? prefs.getString('user_id');
+      return id;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> _loadPendingOrders() async {
+    setState(() {
+      _loadingPending = true;
+      _pendingError = null;
+      _pendingRawResponse = null;
+    });
+    try {
+      debugPrint('[repartidor] _loadPendingOrders: request -> ${API_BASE_URL}');
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'action': 'get_pending_orders'}),
+      );
+      debugPrint('[repartidor] _loadPendingOrders: status=${resp.statusCode}');
+      debugPrint('[repartidor] _loadPendingOrders: body=${resp.body}');
+      if (resp.statusCode == 200) {
+        final decoded = json.decode(resp.body);
+        List<dynamic> ordersRaw = [];
+        if (decoded is List) {
+          ordersRaw = decoded;
+        } else if (decoded is Map) {
+          if (decoded['orders'] != null)
+            ordersRaw = decoded['orders'];
+          else if (decoded['data'] != null)
+            ordersRaw = decoded['data'];
+          else if (decoded['pedidos'] != null)
+            ordersRaw = decoded['pedidos'];
+          else if (decoded['success'] == true && decoded.length == 1) {
+            // Caso raro donde el servidor devuelve {"success":true} sin orders
+            ordersRaw = [];
+          }
+        }
+
+        if (ordersRaw.isNotEmpty) {
+          setState(() {
+            _pendingOrders = List<Map<String, dynamic>>.from(
+              ordersRaw.map(
+                (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
+              ),
+            );
+          });
+        } else {
+          setState(() {
+            _pendingOrders = [];
+            _pendingRawResponse = resp.body;
+            _pendingError =
+                'No hay pedidos pendientes recibidos desde el servidor';
+          });
+        }
+      } else {
+        setState(() {
+          _pendingError = 'HTTP ${resp.statusCode}';
+          _pendingRawResponse = resp.body;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _pendingError = 'Error: $e';
+        _pendingRawResponse = e.toString();
+      });
+    } finally {
+      setState(() {
+        _loadingPending = false;
+      });
+    }
+  }
+
+  Future<void> _loadMyOrders() async {
+    setState(() {
+      _loadingMy = true;
+      _myError = null;
+      _myRawResponse = null;
+    });
+    try {
+      debugPrint('[repartidor] _loadMyOrders: starting');
+      final id = await _getRepartidorId();
+      if (id == null) {
+        setState(() {
+          _myError = 'No hay repartidor_id en sesión';
+          _myOrders = [];
+        });
+        return;
+      }
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'get_repartidor_orders',
+          'repartidor_id': id,
+        }),
+      );
+      debugPrint('[repartidor] _loadMyOrders: status=${resp.statusCode}');
+      debugPrint('[repartidor] _loadMyOrders: body=${resp.body}');
+      if (resp.statusCode == 200) {
+        final decoded = json.decode(resp.body);
+        if (decoded is Map &&
+            decoded['success'] == true &&
+            decoded['orders'] != null) {
+          setState(() {
+            _myOrders = List<Map<String, dynamic>>.from(decoded['orders']);
+          });
+        } else {
+          // intentar aceptar otras formas (data/pedidos) o guardar raw para debug
+          List<dynamic> ordersRaw = [];
+          if (decoded is List)
+            ordersRaw = decoded;
+          else if (decoded is Map) {
+            if (decoded['orders'] != null)
+              ordersRaw = decoded['orders'];
+            else if (decoded['data'] != null)
+              ordersRaw = decoded['data'];
+            else if (decoded['pedidos'] != null)
+              ordersRaw = decoded['pedidos'];
+          }
+          if (ordersRaw.isNotEmpty) {
+            setState(() {
+              _myOrders = List<Map<String, dynamic>>.from(
+                ordersRaw.map(
+                  (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
+                ),
+              );
+            });
+          } else {
+            setState(() {
+              _myError = 'Respuesta inválida del servidor';
+              _myRawResponse = resp.body;
+            });
+          }
+        }
+      } else {
+        setState(() {
+          _myError = 'HTTP ${resp.statusCode}';
+          _myRawResponse = resp.body;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _myError = 'Error: $e';
+      });
+    } finally {
+      setState(() {
+        _loadingMy = false;
+      });
+    }
+  }
+
+  Future<void> _assignOrder(String orderId) async {
+    final id = await _getRepartidorId();
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('No hay repartidor en sesión')),
+      );
+      return;
+    }
+    try {
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'assign_order',
+          'order_id': orderId,
+          'repartidor_id': id,
+        }),
+      );
+      final decoded = resp.statusCode == 200 ? json.decode(resp.body) : null;
+      if (decoded != null && decoded['success'] == true) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(const SnackBar(content: Text('Pedido asignado')));
+        await _loadPendingOrders();
+        await _loadMyOrders();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(decoded?['message'] ?? 'Error asignando')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error de red: $e')));
+    }
+  }
+
+  Future<void> _updateOrderStatus(String orderId, String status) async {
+    try {
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'update_order_status',
+          'order_id': orderId,
+          'status': status,
+        }),
+      );
+      final decoded = resp.statusCode == 200 ? json.decode(resp.body) : null;
+      if (decoded != null && decoded['success'] == true) {
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Estado actualizado: $status')));
+        await _loadMyOrders();
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(decoded?['message'] ?? 'Error actualizando')),
+        );
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error de red: $e')));
+    }
+  }
+
   Widget _buildMyOrderCard(
     String orderNumber,
     String customer,
@@ -686,8 +1083,9 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     String payment,
     Color colorPrimario,
     Color colorVerde,
-    int index,
-  ) {
+    int index, {
+    String? orderId,
+  }) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(16),
@@ -769,9 +1167,14 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: () {
-                    // Marcar como entregado
-                  },
+                  onPressed: orderId == null
+                      ? null
+                      : () async {
+                          final next = status == 'En Camino'
+                              ? 'Entregado'
+                              : 'En Camino';
+                          await _updateOrderStatus(orderId, next);
+                        },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorVerde,
                     foregroundColor: Colors.white,
@@ -788,11 +1191,6 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         ],
       ),
     );
-  }
-
-  String _getOrderStatus(int index) {
-    final statuses = ['Asignado', 'En Camino', 'Cerca'];
-    return statuses[index % statuses.length];
   }
 
   Color _getStatusColor(String status) {
