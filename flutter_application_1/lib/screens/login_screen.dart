@@ -28,6 +28,7 @@ class _LoginScreenState extends State<LoginScreen> {
   // ✅ NUEVOS ESTADOS para el login
   bool _isLoading = false; // Para mostrar el indicador de carga
   String _errorMessage = ''; // Para mostrar errores
+  bool _rememberMe = false; // Guardar credenciales
 
   @override
   void initState() {
@@ -42,6 +43,25 @@ class _LoginScreenState extends State<LoginScreen> {
         _passwordFocused = _passwordFocusNode.hasFocus;
       });
     });
+    // Cargar credenciales guardadas (si existen)
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedEmail = prefs.getString('saved_email') ?? '';
+      final savedPassword = prefs.getString('saved_password') ?? '';
+      if (savedEmail.isNotEmpty && savedPassword.isNotEmpty) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _passwordController.text = savedPassword;
+          _rememberMe = true;
+        });
+      }
+    } catch (_) {
+      // No bloquear la pantalla si falla el acceso a SharedPreferences
+    }
   }
 
   @override
@@ -725,6 +745,14 @@ class _LoginScreenState extends State<LoginScreen> {
               await prefs.setString('repartidor_id', userId);
             }
           }
+          // Guardar o eliminar credenciales según checkbox "Recordarme"
+          if (_rememberMe) {
+            await prefs.setString('saved_email', _emailController.text.trim());
+            await prefs.setString('saved_password', _passwordController.text);
+          } else {
+            await prefs.remove('saved_email');
+            await prefs.remove('saved_password');
+          }
         } catch (_) {
           // no bloquear el login si falla el guardado local
         }
@@ -918,6 +946,29 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
               const SizedBox(height: 12),
+              // Recordarme (guardar credenciales)
+              Row(
+                children: [
+                  Checkbox(
+                    value: _rememberMe,
+                    onChanged: (bool? v) {
+                      setState(() {
+                        _rememberMe = v ?? false;
+                      });
+                    },
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: GestureDetector(
+                      onTap: () => setState(() => _rememberMe = !_rememberMe),
+                      child: const Text(
+                        'Recordarme',
+                        style: TextStyle(fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
 
               // ✅ MENSAJE DE ERROR: Mostrar errores de login
               if (_errorMessage.isNotEmpty)
