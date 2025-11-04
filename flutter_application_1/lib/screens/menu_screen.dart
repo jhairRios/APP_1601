@@ -5,6 +5,7 @@ import 'dart:async';
 import '../services/menu_service.dart';
 import '../widgets/product_image_box.dart';
 import '../widgets/flexible_image.dart';
+import '../services/order_service.dart';
 
 class MenuScreen extends StatefulWidget {
   const MenuScreen({super.key});
@@ -23,6 +24,8 @@ class _MenuScreenState extends State<MenuScreen> {
   List<Map<String, dynamic>> _platillos = [];
   List<Map<String, dynamic>> _categorias = [];
   late StreamSubscription<bool> _menuSubscription;
+  late StreamSubscription<Map<String, dynamic>> _orderSubscriptionAdmin;
+  List<Map<String, dynamic>> _recentOrdersAdmin = [];
 
   @override
   void initState() {
@@ -32,12 +35,20 @@ class _MenuScreenState extends State<MenuScreen> {
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
       _fetchPlatillos();
     });
+    _orderSubscriptionAdmin = OrderService.orderStream.listen((order) {
+      try {
+        setState(() {
+          _recentOrdersAdmin.insert(0, Map<String, dynamic>.from(order));
+        });
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
     try {
       _menuSubscription.cancel();
+      _orderSubscriptionAdmin.cancel();
     } catch (_) {}
     super.dispose();
   }
@@ -248,6 +259,60 @@ class _MenuScreenState extends State<MenuScreen> {
               ),
             ),
             const SizedBox(height: 24),
+
+            // Mostrar pedidos recientes (si los hay) para que el admin vea método de pago
+            if (_recentOrdersAdmin.isNotEmpty) ...[
+              Text(
+                'Pedidos Recientes',
+                style: TextStyle(
+                  fontSize: 18,
+                  fontWeight: FontWeight.bold,
+                  color: colorPrimario,
+                ),
+              ),
+              const SizedBox(height: 8),
+              SizedBox(
+                height: 120,
+                child: ListView.builder(
+                  scrollDirection: Axis.horizontal,
+                  itemCount: _recentOrdersAdmin.length,
+                  itemBuilder: (context, idx) {
+                    final o = _recentOrdersAdmin[idx];
+                    final id = o['order_id']?.toString() ?? 'Pedido';
+                    final total = o['total']?.toString() ?? '0.00';
+                    final payment = o['payment_method']?.toString() ?? '';
+                    return Container(
+                      width: 220,
+                      margin: const EdgeInsets.only(right: 12),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.white,
+                        borderRadius: BorderRadius.circular(12),
+                        boxShadow: [
+                          BoxShadow(
+                            color: Colors.black.withOpacity(0.04),
+                            blurRadius: 6,
+                          ),
+                        ],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(id, style: const TextStyle(fontWeight: FontWeight.bold)),
+                          const SizedBox(height: 6),
+                          Text('Total: \$$total'),
+                          if (payment.isNotEmpty) ...[
+                            const SizedBox(height: 6),
+                            Text('Pago: $payment', style: const TextStyle(fontWeight: FontWeight.w600)),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+              const SizedBox(height: 16),
+            ],
 
             // Título de los platillos
             Text(

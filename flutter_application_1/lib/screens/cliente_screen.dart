@@ -8,6 +8,7 @@ import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 import '../widgets/product_image_box.dart';
 import 'order_confirmation.dart';
+import '../services/order_service.dart';
 
 class ClienteScreen extends StatefulWidget {
   const ClienteScreen({super.key});
@@ -1023,6 +1024,8 @@ class _ClienteScreenState extends State<ClienteScreen>
     final direccionCtrl = TextEditingController();
     final telefonoCtrl = TextEditingController();
     bool loading = false;
+    String selectedPayment = 'Efectivo';
+    final paymentOptions = ['Efectivo', 'Tarjeta', 'Pago móvil'];
 
     await showModalBottomSheet(
       context: context,
@@ -1049,6 +1052,33 @@ class _ClienteScreenState extends State<ClienteScreen>
                     ),
                     const SizedBox(height: 8),
                     Text('Total: \$${totalConEnvio.toStringAsFixed(2)}'),
+                    const SizedBox(height: 12),
+                    // Selección de método de pago
+                    const Text(
+                      'Método de pago',
+                      style: TextStyle(fontWeight: FontWeight.w600),
+                    ),
+                    const SizedBox(height: 8),
+                    DropdownButtonFormField<String>(
+                      value: selectedPayment,
+                      items: paymentOptions
+                          .map((p) => DropdownMenuItem(
+                                value: p,
+                                child: Text(p),
+                              ))
+                          .toList(),
+                      onChanged: (v) {
+                        setModalState(() {
+                          selectedPayment = v ?? selectedPayment;
+                        });
+                      },
+                      decoration: const InputDecoration(
+                        border: OutlineInputBorder(),
+                        isDense: true,
+                        contentPadding:
+                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                      ),
+                    ),
                     const SizedBox(height: 12),
                     TextField(
                       controller: direccionCtrl,
@@ -1114,6 +1144,7 @@ class _ClienteScreenState extends State<ClienteScreen>
                                     'telefono': telefono,
                                     'items': itemsPayload,
                                     'user_id': null,
+                                    'payment_method': selectedPayment,
                                   };
 
                                   try {
@@ -1161,6 +1192,18 @@ class _ClienteScreenState extends State<ClienteScreen>
                                               ),
                                         ),
                                       );
+                                        // Notificar a la app (empleado/admin) sobre el nuevo pedido
+                                        try {
+                                          OrderService.notifyNewOrder({
+                                            'order_id': orderId,
+                                            'items': confirmedItems,
+                                            'total': confirmedTotal,
+                                            'ubicacion': confirmedUbicacion,
+                                            'telefono': confirmedTelefono,
+                                            'payment_method': selectedPayment,
+                                            'status': 'Pendiente',
+                                          });
+                                        } catch (_) {}
                                     } else {
                                       final msg =
                                           decoded != null &&

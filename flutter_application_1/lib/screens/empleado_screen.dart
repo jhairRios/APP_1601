@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 import '../widgets/product_image_box.dart';
+import '../services/order_service.dart';
 
 class EmpleadoScreen extends StatefulWidget {
   const EmpleadoScreen({Key? key}) : super(key: key);
@@ -32,6 +33,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   int _selectedIndex = 0;
   List<dynamic> _menuItems = [];
   late StreamSubscription<bool> _menuSubscription;
+  late StreamSubscription<Map<String, dynamic>> _orderSubscription;
+  List<Map<String, dynamic>> _recentOrders = [];
 
   @override
   void initState() {
@@ -42,12 +45,21 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
       _fetchMenuItems();
     });
+    // Escuchar nuevos pedidos creados en la app (cliente)
+    _orderSubscription = OrderService.orderStream.listen((order) {
+      try {
+        setState(() {
+          _recentOrders.insert(0, Map<String, dynamic>.from(order));
+        });
+      } catch (_) {}
+    });
   }
 
   @override
   void dispose() {
     try {
       _menuSubscription.cancel();
+      _orderSubscription.cancel();
     } catch (_) {}
     super.dispose();
   }
@@ -1802,7 +1814,38 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
           const SizedBox(height: 20),
 
-          // Lista de pedidos
+          // Lista de pedidos (primero pedidos recientes desde OrderService)
+          if (_recentOrders.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            const Text(
+              'Pedidos recientes',
+              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 8),
+            Column(
+              children: _recentOrders.map((o) {
+                final orderNumber = o['order_id']?.toString() ?? 'Pedido';
+                final customer = o['customer']?.toString() ?? 'Cliente';
+                final table = o['table']?.toString() ?? o['ubicacion']?.toString() ?? '';
+                final status = o['status']?.toString() ?? 'Pendiente';
+                final total = o['total'] != null ? '\$${o['total']}' : '\$0.00';
+                final payment = o['payment_method']?.toString() ?? '';
+                return _buildOrderCard(
+                  orderNumber,
+                  customer,
+                  table,
+                  status,
+                  total,
+                  colorPrimario,
+                  colorNaranja,
+                  payment,
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 16),
+          ],
+
+          // Lista simulada si no hay pedidos recientes o para mostrar más
           ListView.builder(
             shrinkWrap: true,
             physics: const NeverScrollableScrollPhysics(),
@@ -1816,6 +1859,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 '\$${(index + 1) * 25}.00',
                 colorPrimario,
                 colorNaranja,
+                '',
               );
             },
           ),
@@ -2030,6 +2074,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     String total,
     Color colorPrimario,
     Color colorNaranja,
+    String? paymentMethod,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2079,6 +2124,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           const SizedBox(height: 8),
           Text('Cliente: $customer'),
           Text('Mesa: $table'),
+          if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text('Pago: $paymentMethod', style: const TextStyle(fontWeight: FontWeight.w500)),
+          ],
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
