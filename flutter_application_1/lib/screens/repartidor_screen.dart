@@ -1160,12 +1160,21 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         final msg = decoded?['message'] ?? 'Error actualizando';
         // Mostrar el mensaje legible y conservar la respuesta completa en logs
         String display = msg;
-        if (decoded != null && decoded['current_status'] != null) {
+        if (decoded != null) {
           final current = decoded['current_status'];
-          if (current == status) {
-            display = 'El pedido ya está en estado: $current';
-          } else {
-            display = '$msg (estado actual: $current)';
+          final currentLabel = decoded['current_status_label'];
+          if (currentLabel != null && currentLabel.toString().isNotEmpty) {
+            if (currentLabel == status) {
+              display = 'El pedido ya está en estado: $currentLabel';
+            } else {
+              display = '$msg (estado actual: $currentLabel)';
+            }
+          } else if (current != null) {
+            if (current.toString() == status) {
+              display = 'El pedido ya está en estado: $current';
+            } else {
+              display = '$msg (estado actual: $current)';
+            }
           }
         }
         ScaffoldMessenger.of(

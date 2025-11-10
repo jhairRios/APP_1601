@@ -858,9 +858,30 @@ try {
                 exit;
             }
 
-            // Perform the update using the discovered id column
+            // Determine data type of estado column to decide mapping behavior
+            $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
+            $colTypeStmt->execute([$dbname, $estadoCol]);
+            $colType = $colTypeStmt->fetchColumn();
+            $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
+
+            // Map textual statuses to numeric codes when DB stores numeric codes
+            $statusMap = [
+                'Asignado' => 0, 'Pendiente' => 0, 'Listo' => 0,
+                'En Camino' => 1, 'EnCamino' => 1, 'Cerca' => 2,
+                'Entregado' => 3, 'Finalizado' => 3
+            ];
+
+            $updateValue = $status;
+            if ($isNumericEstado) {
+                if (is_numeric($status)) {
+                    $updateValue = intval($status);
+                } else {
+                    $updateValue = array_key_exists($status, $statusMap) ? $statusMap[$status] : (int)preg_replace('/[^0-9]/', '', (string)$status);
+                }
+            }
+
             $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$usedIdCol} = ?");
-            $stmt->execute([$status, $resolvedIdValue]);
+            $stmt->execute([$updateValue, $resolvedIdValue]);
             if ($stmt->rowCount() > 0) {
                 echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
             } else {
@@ -870,7 +891,12 @@ try {
                     $chk->execute([$resolvedIdValue]);
                     $row = $chk->fetch(PDO::FETCH_ASSOC);
                     $current = $row ? ($row['current_status'] ?? null) : null;
-                    echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current]);
+                    $current_label = null;
+                    if ($isNumericEstado && $current !== null) {
+                        $rev = array_search(intval($current), $statusMap, true);
+                        if ($rev !== false) $current_label = $rev;
+                    }
+                    echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current, 'current_status_label' => $current_label]);
                 } catch (PDOException $e) {
                     echo json_encode(['success' => false, 'message' => 'No se actualizó (sin cambios)']);
                 }
@@ -1059,8 +1085,29 @@ try {
                     }
                     if (!$found) { echo json_encode(['success' => false, 'message' => 'Pedido no encontrado con el id proporcionado']); exit; }
 
+                    // Determine data type of estado column to decide mapping behavior
+                    $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
+                    $colTypeStmt->execute([$dbname, $estadoCol]);
+                    $colType = $colTypeStmt->fetchColumn();
+                    $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
+
+                    $statusMap = [
+                        'Asignado' => 0, 'Pendiente' => 0, 'Listo' => 0,
+                        'En Camino' => 1, 'EnCamino' => 1, 'Cerca' => 2,
+                        'Entregado' => 3, 'Finalizado' => 3
+                    ];
+
+                    $updateValue = $status;
+                    if ($isNumericEstado) {
+                        if (is_numeric($status)) {
+                            $updateValue = intval($status);
+                        } else {
+                            $updateValue = array_key_exists($status, $statusMap) ? $statusMap[$status] : (int)preg_replace('/[^0-9]/', '', (string)$status);
+                        }
+                    }
+
                     $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$usedIdCol} = ?");
-                    $stmt->execute([$status, $resolvedIdValue]);
+                    $stmt->execute([$updateValue, $resolvedIdValue]);
                     if ($stmt->rowCount() > 0) {
                         echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
                     } else {
@@ -1069,7 +1116,12 @@ try {
                             $chk->execute([$resolvedIdValue]);
                             $row = $chk->fetch(PDO::FETCH_ASSOC);
                             $current = $row ? ($row['current_status'] ?? null) : null;
-                            echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current]);
+                            $current_label = null;
+                            if ($isNumericEstado && $current !== null) {
+                                $rev = array_search(intval($current), $statusMap, true);
+                                if ($rev !== false) $current_label = $rev;
+                            }
+                            echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current, 'current_status_label' => $current_label]);
                         } catch (PDOException $e) {
                             echo json_encode(['success' => false, 'message' => 'No se actualizó (sin cambios)']);
                         }

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'dart:async';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
 import '../services/restaurante_service.dart';
@@ -187,6 +188,8 @@ class _ClienteScreenState extends State<ClienteScreen>
 
   // Lista cargada desde la API
   List<Map<String, dynamic>> _restaurantes = [];
+  // Mis pedidos locales (cargados desde la API usando los order_ids guardados)
+  List<Map<String, dynamic>>? _myOrders;
   late StreamSubscription<bool> _menuSubscription;
   // Indica si ya se abrió automáticamente el formulario al entrar
   bool _openedRestauranteForm = false;
@@ -227,6 +230,8 @@ class _ClienteScreenState extends State<ClienteScreen>
     _cargarRestaurantes();
     // Cargar menú desde la API
     _cargarMenuItems();
+    // Cargar pedidos guardados (IDs) y resolver detalles
+    _loadMyOrders();
     // Suscribirse a cambios en el menú para refrescar automáticamente
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
       _cargarMenuItems();
@@ -974,6 +979,7 @@ class _ClienteScreenState extends State<ClienteScreen>
     Color colorVerde,
     Color colorNaranja,
   ) {
+    final orders = _myOrders ?? [];
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -996,24 +1002,237 @@ class _ClienteScreenState extends State<ClienteScreen>
 
           const SizedBox(height: 20),
 
-          // Lista de pedidos (mock data)
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 3,
-            itemBuilder: (context, index) {
-              return _buildOrderStatusCard(
-                'Pedido #${5000 + index}',
-                _getOrderStatus(index),
-                '${DateTime.now().subtract(Duration(hours: index + 1)).day}/${DateTime.now().month}',
-                '\$${(index + 1) * 45}.00',
-                colorPrimario,
-                colorVerde,
-                colorNaranja,
-                index,
-              );
-            },
-          ),
+          if (_myOrders == null) ...[
+            // Cargando pedidos
+            Container(
+              padding: const EdgeInsets.all(20),
+              alignment: Alignment.center,
+              child: const SizedBox(
+                height: 48,
+                width: 48,
+                child: CircularProgressIndicator(),
+              ),
+            ),
+          ] else if ((_myOrders ?? []).isEmpty) ...[
+            Container(
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.grey.withOpacity(0.1),
+                    spreadRadius: 1,
+                    blurRadius: 4,
+                    offset: const Offset(0, 2),
+                  ),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Text(
+                    'No se han encontrado pedidos locales',
+                    style: TextStyle(color: Colors.grey[700]),
+                  ),
+                  const SizedBox(height: 12),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton(
+                      onPressed: _loadMyOrders,
+                      child: const Text('Refrescar pedidos'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ] else ...[
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: orders.length,
+              itemBuilder: (context, i) {
+                final entry = orders[i];
+                final pedido = Map<String, dynamic>.from(entry['pedido'] ?? {});
+                final items = List<dynamic>.from(entry['items'] ?? []);
+                final orderId =
+                    entry['order_id'] ??
+                    pedido['ID_Pedido'] ??
+                    pedido['Id_Pedido'] ??
+                    pedido['id'] ??
+                    entry['order_id'];
+
+                // Fecha
+                String fecha = '-';
+                final f =
+                    pedido['Fecha'] ??
+                    pedido['Fecha_Registro'] ??
+                    pedido['fecha'] ??
+                    pedido['created_at'];
+                if (f != null) fecha = f.toString();
+
+                // Total
+                double total = 0.0;
+                if (pedido.containsKey('Total') ||
+                    pedido.containsKey('total')) {
+                  total =
+                      double.tryParse(
+                        (pedido['Total'] ?? pedido['total']).toString(),
+                      ) ??
+                      0.0;
+                } else {
+                  for (var it in items) {
+                    final price =
+                        double.tryParse(
+                          (it['Precio'] ?? it['price'] ?? 0).toString(),
+                        ) ??
+                        0.0;
+                    final qty =
+                        int.tryParse(
+                          (it['Cantidad'] ?? it['quantity'] ?? 1).toString(),
+                        ) ??
+                        1;
+                    total += price * qty;
+                  }
+                }
+
+                final statusLabel = _statusLabelFromPedido(pedido);
+
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: BorderRadius.circular(12),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.grey.withOpacity(0.1),
+                        spreadRadius: 1,
+                        blurRadius: 4,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text(
+                            'Pedido #${orderId ?? '-'}',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                              color: colorPrimario,
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: _getOrderStatusColor(
+                                statusLabel,
+                              ).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: Text(
+                              statusLabel,
+                              style: TextStyle(
+                                fontSize: 12,
+                                color: _getOrderStatusColor(statusLabel),
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Text('Fecha: $fecha'),
+                      Text('Total: \$${total.toStringAsFixed(2)}'),
+                      const SizedBox(height: 12),
+                      // barra de progreso simplificada
+                      _buildOrderProgress(
+                        statusLabel,
+                        colorPrimario,
+                        colorVerde,
+                        colorNaranja,
+                      ),
+                      const SizedBox(height: 12),
+                      Row(
+                        children: [
+                          Expanded(
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.of(context).push(
+                                  MaterialPageRoute(
+                                    builder: (_) => OrderConfirmationScreen(
+                                      orderId: orderId,
+                                      items: items,
+                                      total: total,
+                                      ubicacion:
+                                          pedido['Ubicacion'] ??
+                                          pedido['ubicacion'],
+                                      telefono:
+                                          pedido['Telefono'] ??
+                                          pedido['telefono'],
+                                    ),
+                                  ),
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                foregroundColor: colorPrimario,
+                                side: BorderSide(color: colorPrimario),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(8),
+                                ),
+                              ),
+                              child: const Text('Ver Detalles'),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          if (statusLabel.toLowerCase().contains('prepar') ||
+                              statusLabel.toLowerCase().contains('en camino') ||
+                              statusLabel.toLowerCase().contains('rastre')) ...[
+                            Expanded(
+                              child: ElevatedButton(
+                                onPressed: () {
+                                  Navigator.of(context).push(
+                                    MaterialPageRoute(
+                                      builder: (_) => OrderConfirmationScreen(
+                                        orderId: orderId,
+                                        items: items,
+                                        total: total,
+                                        ubicacion:
+                                            pedido['Ubicacion'] ??
+                                            pedido['ubicacion'],
+                                        telefono:
+                                            pedido['Telefono'] ??
+                                            pedido['telefono'],
+                                      ),
+                                    ),
+                                  );
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: colorNaranja,
+                                  foregroundColor: Colors.white,
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                ),
+                                child: const Text('Rastrear'),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
         ],
       ),
     );
@@ -1062,10 +1281,9 @@ class _ClienteScreenState extends State<ClienteScreen>
                     DropdownButtonFormField<String>(
                       value: selectedPayment,
                       items: paymentOptions
-                          .map((p) => DropdownMenuItem(
-                                value: p,
-                                child: Text(p),
-                              ))
+                          .map(
+                            (p) => DropdownMenuItem(value: p, child: Text(p)),
+                          )
                           .toList(),
                       onChanged: (v) {
                         setModalState(() {
@@ -1075,8 +1293,10 @@ class _ClienteScreenState extends State<ClienteScreen>
                       decoration: const InputDecoration(
                         border: OutlineInputBorder(),
                         isDense: true,
-                        contentPadding:
-                            EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                        contentPadding: EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
                       ),
                     ),
                     const SizedBox(height: 12),
@@ -1192,18 +1412,39 @@ class _ClienteScreenState extends State<ClienteScreen>
                                               ),
                                         ),
                                       );
-                                        // Notificar a la app (empleado/admin) sobre el nuevo pedido
-                                        try {
-                                          OrderService.notifyNewOrder({
-                                            'order_id': orderId,
-                                            'items': confirmedItems,
-                                            'total': confirmedTotal,
-                                            'ubicacion': confirmedUbicacion,
-                                            'telefono': confirmedTelefono,
-                                            'payment_method': selectedPayment,
-                                            'status': 'Pendiente',
-                                          });
-                                        } catch (_) {}
+                                      // Persistir el orderId localmente para que el cliente
+                                      // pueda ver su pedido en "Mis Pedidos" aunque no esté logueado.
+                                      try {
+                                        if (orderId != null) {
+                                          final prefs =
+                                              await SharedPreferences.getInstance();
+                                          final key = 'my_order_ids';
+                                          final existing =
+                                              prefs.getStringList(key) ?? [];
+                                          final sid = orderId.toString();
+                                          if (!existing.contains(sid)) {
+                                            existing.insert(0, sid);
+                                            await prefs.setStringList(
+                                              key,
+                                              existing,
+                                            );
+                                          }
+                                          // refrescar vista de pedidos
+                                          _loadMyOrders();
+                                        }
+                                      } catch (_) {}
+                                      // Notificar a la app (empleado/admin) sobre el nuevo pedido
+                                      try {
+                                        OrderService.notifyNewOrder({
+                                          'order_id': orderId,
+                                          'items': confirmedItems,
+                                          'total': confirmedTotal,
+                                          'ubicacion': confirmedUbicacion,
+                                          'telefono': confirmedTelefono,
+                                          'payment_method': selectedPayment,
+                                          'status': 'Pendiente',
+                                        });
+                                      } catch (_) {}
                                     } else {
                                       final msg =
                                           decoded != null &&
@@ -1993,6 +2234,76 @@ class _ClienteScreenState extends State<ClienteScreen>
         (sum, item) => sum + (item['quantity'] as int),
       );
     });
+  }
+
+  // Cargar detalles de pedidos guardados (por order_id) y poblar _myOrders
+  Future<void> _loadMyOrders() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final ids = prefs.getStringList('my_order_ids') ?? [];
+      final List<Map<String, dynamic>> loaded = [];
+      for (final id in ids) {
+        final detail = await _fetchOrderDetail(id);
+        if (detail != null) {
+          // normalizar la estructura para la UI
+          loaded.add({
+            'order_id': id,
+            'pedido': detail['pedido'] ?? {},
+            'items': detail['items'] ?? [],
+          });
+        }
+      }
+      setState(() {
+        _myOrders = loaded;
+      });
+    } catch (e) {
+      // ignore errores locales, no bloquear UI
+    }
+  }
+
+  Future<Map<String, dynamic>?> _fetchOrderDetail(String orderId) async {
+    try {
+      final payload = {'action': 'get_order_detail', 'order_id': orderId};
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode(payload),
+      );
+      if (resp.statusCode == 200) {
+        final decoded = json.decode(resp.body);
+        if (decoded != null && decoded['success'] == true) {
+          return {
+            'pedido': decoded['pedido'] ?? {},
+            'items': decoded['items'] ?? [],
+          };
+        }
+      }
+    } catch (e) {
+      // ignore
+    }
+    return null;
+  }
+
+  String _statusLabelFromPedido(Map<String, dynamic> pedido) {
+    final possible =
+        (pedido['estado'] ??
+        pedido['Estado'] ??
+        pedido['status'] ??
+        pedido['Estado_Pedido'] ??
+        pedido['estado_pedido']);
+    if (possible == null) return 'Pendiente';
+    if (possible is num) {
+      final map = {0: 'Pendiente', 1: 'En Camino', 2: 'Cerca', 3: 'Entregado'};
+      return map[possible] ?? possible.toString();
+    }
+    final s = possible.toString();
+    // If comes as numeric string
+    final n = int.tryParse(s);
+    if (n != null) {
+      final map = {0: 'Pendiente', 1: 'En Camino', 2: 'Cerca', 3: 'Entregado'};
+      return map[n] ?? s;
+    }
+    return s;
   }
 
   String _getOrderStatus(int index) {
