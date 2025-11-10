@@ -5,6 +5,7 @@ import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/flexible_image.dart';
 import '../services/api_config.dart';
+import '../utils/web_open.dart';
 
 class RepartidorScreen extends StatefulWidget {
   const RepartidorScreen({super.key});
@@ -133,6 +134,73 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _openMapForOrder(String orderId) async {
+    // show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'action': 'get_order_detail', 'order_id': orderId}),
+      );
+      Navigator.of(context).pop();
+      if (resp.statusCode == 200) {
+        final decoded = json.decode(resp.body);
+        if (decoded != null && decoded['success'] == true) {
+          final pedido = decoded['pedido'] ?? {};
+          final ubicacion = (pedido['Ubicacion'] ?? pedido['ubicacion'] ?? '')
+              .toString();
+          if (ubicacion.trim().isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('No hay ubicación disponible para este pedido'),
+              ),
+            );
+            return;
+          }
+          final mapsUrl =
+              'https://www.google.com/maps/search/?api=1&query=' +
+              Uri.encodeComponent(ubicacion);
+          try {
+            openInNewTab(mapsUrl);
+          } catch (_) {
+            // If platform doesn't support opening, show the URL for manual copy
+            await showDialog(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Abrir mapa'),
+                content: SelectableText(mapsUrl),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.of(ctx).pop(),
+                    child: const Text('Cerrar'),
+                  ),
+                ],
+              ),
+            );
+          }
+          return;
+        }
+      }
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('No se pudo obtener el detalle del pedido'),
+        ),
+      );
+    } catch (e) {
+      try {
+        Navigator.of(context).pop();
+      } catch (_) {}
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+    }
   }
 
   // ✅ DASHBOARD PRINCIPAL
@@ -1017,14 +1085,25 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
       return;
     }
     try {
+      // sanitize order id to digits only (defensive: some sources may include '#')
+      final sanitizedOrderId = (orderId ?? '').toString().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+      debugPrint(
+        '[repartidor] assign_order payload: order_id=$sanitizedOrderId repartidor_id=$id',
+      );
       final resp = await http.post(
         Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'assign_order',
-          'order_id': orderId,
+          'order_id': sanitizedOrderId,
           'repartidor_id': id,
         }),
+      );
+      debugPrint(
+        '[repartidor] assign_order response: status=${resp.statusCode} body=${resp.body}',
       );
       final decoded = resp.statusCode == 200 ? json.decode(resp.body) : null;
       if (decoded != null && decoded['success'] == true) {
@@ -1034,8 +1113,13 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         await _loadPendingOrders();
         await _loadMyOrders();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(decoded?['message'] ?? 'Error asignando')),
+        final msg = decoded?['message'] ?? 'Error asignando';
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('$msg')));
+        // keep the full body in debug logs for troubleshooting
+        debugPrint(
+          '[repartidor] assign_order decoded=$decoded raw=${resp.body}',
         );
       }
     } catch (e) {
@@ -1047,14 +1131,24 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
 
   Future<void> _updateOrderStatus(String orderId, String status) async {
     try {
+      final sanitizedOrderId = (orderId ?? '').toString().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
+      debugPrint(
+        '[repartidor] update_order_status payload: order_id=$sanitizedOrderId status=$status',
+      );
       final resp = await http.post(
         Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'action': 'update_order_status',
-          'order_id': orderId,
+          'order_id': sanitizedOrderId,
           'status': status,
         }),
+      );
+      debugPrint(
+        '[repartidor] update_order_status response: status=${resp.statusCode} body=${resp.body}',
       );
       final decoded = resp.statusCode == 200 ? json.decode(resp.body) : null;
       if (decoded != null && decoded['success'] == true) {
@@ -1063,9 +1157,25 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         ).showSnackBar(SnackBar(content: Text('Estado actualizado: $status')));
         await _loadMyOrders();
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(decoded?['message'] ?? 'Error actualizando')),
+        final msg = decoded?['message'] ?? 'Error actualizando';
+        // Mostrar el mensaje legible y conservar la respuesta completa en logs
+        String display = msg;
+        if (decoded != null && decoded['current_status'] != null) {
+          final current = decoded['current_status'];
+          if (current == status) {
+            display = 'El pedido ya está en estado: $current';
+          } else {
+            display = '$msg (estado actual: $current)';
+          }
+        }
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text(display)));
+        debugPrint(
+          '[repartidor] update_order_status failed decoded=$decoded raw=${resp.body}',
         );
+        // refrescar lista para asegurar que UI muestre el estado real
+        await _loadMyOrders();
       }
     } catch (e) {
       ScaffoldMessenger.of(
@@ -1150,9 +1260,11 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
             children: [
               Expanded(
                 child: OutlinedButton.icon(
-                  onPressed: () {
-                    // Ver en mapa
-                  },
+                  onPressed: orderId == null
+                      ? null
+                      : () async {
+                          await _openMapForOrder(orderId);
+                        },
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colorPrimario,
                     side: BorderSide(color: colorPrimario),

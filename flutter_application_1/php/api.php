@@ -568,9 +568,61 @@ try {
                 error_log('create_order: inserted Platillos_Pedido item id=' . $nextId . ' name=' . $nombre . ' qty=' . $cantidad);
             }
 
+            // Attempt to auto-assign an available repartidor (Estado_Repartidor = 1)
+            $assignedRepartidor = null;
+            try {
+                // Determine possible repartidor column name in pedidos
+                $repartidorCol = null;
+                foreach ($cols as $c) {
+                    if (in_array(strtolower($c), ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) { $repartidorCol = $c; break; }
+                }
+                // Determine estado column name in pedidos
+                $estadoCol = null;
+                foreach ($cols as $c) {
+                    if (in_array(strtolower($c), ['estado','estado_pedido','status'])) { $estadoCol = $c; break; }
+                }
+
+                // If repartidor table exists and there is a repartidor available, assign
+                try {
+                    $chkRep = $pdo->prepare("SELECT ID_Repartidor FROM repartidor WHERE Estado_Repartidor = 1 LIMIT 1 FOR UPDATE");
+                    $chkRep->execute();
+                    $rrep = $chkRep->fetch(PDO::FETCH_ASSOC);
+                    if ($rrep && isset($rrep['ID_Repartidor'])) {
+                        $targetRepId = $rrep['ID_Repartidor'];
+                        // If pedidos table has a repartidor column, update it
+                        if ($repartidorCol !== null) {
+                            $sqlUpd = "UPDATE pedidos SET {$repartidorCol} = ?";
+                            $paramsUpd = [$targetRepId];
+                            if ($estadoCol !== null) { $sqlUpd .= ", {$estadoCol} = ?"; $paramsUpd[] = 'Asignado'; }
+                            $sqlUpd .= " WHERE ";
+                            // determine idCol for pedidos
+                            $idCol = null;
+                            foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
+                            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
+                            $sqlUpd .= "{$idCol} = ?"; $paramsUpd[] = $orderId;
+                            $updStmt = $pdo->prepare($sqlUpd);
+                            $updStmt->execute($paramsUpd);
+                        }
+
+                        // Mark repartidor as busy (Estado_Repartidor = 0)
+                        $updRep = $pdo->prepare("UPDATE repartidor SET Estado_Repartidor = 0 WHERE ID_Repartidor = ?");
+                        $updRep->execute([$targetRepId]);
+                        $assignedRepartidor = $targetRepId;
+                        error_log('create_order: auto-assigned repartidor ' . $targetRepId);
+                    }
+                } catch (PDOException $e) {
+                    // If repartidor table missing or error, ignore assignment
+                    error_log('create_order: repartidor assign check failed: ' . $e->getMessage());
+                }
+            } catch (Exception $e) {
+                // ignore
+            }
+
             $pdo->commit();
             error_log('create_order: commit successful for order id=' . $orderId);
-            echo json_encode(['success' => true, 'message' => 'Pedido creado', 'order_id' => $orderId]);
+            $response = ['success' => true, 'message' => 'Pedido creado', 'order_id' => $orderId];
+            if ($assignedRepartidor !== null) $response['assigned_repartidor'] = $assignedRepartidor;
+            echo json_encode($response);
         } catch (PDOException $e) {
             if ($pdo->inTransaction()) $pdo->rollBack();
             error_log('create_order: error ' . $e->getMessage());
@@ -747,14 +799,82 @@ try {
             $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
             $colsStmt->execute([$dbname]);
             $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $estadoCol = null; $idCol = null;
-            foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['estado','estado_pedido','status'])) { $estadoCol = $c; } if (in_array($low, ['id_pedido','id','id_pedidos','idpedidos'])) { if ($idCol===null) $idCol = $c; } }
-            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
+            $estadoCol = null; 
+            foreach ($cols as $c) {
+                $low = strtolower($c);
+                if (in_array($low, ['estado','estado_pedido','status'])) { $estadoCol = $c; break; }
+            }
             if ($estadoCol === null) { echo json_encode(['success' => false, 'message' => 'Tabla pedidos no tiene columna de estado']); exit; }
-            $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$idCol} = ?");
-            $stmt->execute([$status, $order_id]);
-            if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
-            else echo json_encode(['success' => false, 'message' => 'No se actualizó (id inexistente o mismo estado)']);
+
+            // Normalize provided id: try digits-only numeric value as first attempt
+            $originalOrderId = (string)$order_id;
+            $digitsOnly = preg_replace('/[^0-9]/', '', $originalOrderId);
+
+            // Candidate id columns to try (prefer common names found in the schema)
+            $candidateIdCols = [];
+            foreach ($cols as $c) {
+                $candidateIdCols[] = $c;
+            }
+            // Prioritize known id column names
+            $preferred = ['ID_Pedido','ID_Pedidos','Id_Pedido','id_pedido','id_pedidos','id','ID','ID_Pedidos'];
+            usort($candidateIdCols, function($a, $b) use ($preferred){
+                $pa = array_search($a, $preferred);
+                $pb = array_search($b, $preferred);
+                if ($pa === false) $pa = 999;
+                if ($pb === false) $pb = 999;
+                return $pa - $pb;
+            });
+
+            $found = false;
+            $usedIdCol = null;
+            $resolvedIdValue = null;
+
+            // Try matching using the original provided value, then digits-only
+            $tries = [$originalOrderId];
+            if ($digitsOnly !== '' && $digitsOnly !== $originalOrderId) $tries[] = $digitsOnly;
+
+            foreach ($candidateIdCols as $idColCandidate) {
+                foreach ($tries as $tryVal) {
+                    // Use prepared SELECT to see if a row exists
+                    $chk = $pdo->prepare("SELECT 1 FROM pedidos WHERE {$idColCandidate} = ? LIMIT 1");
+                    try {
+                        $chk->execute([$tryVal]);
+                        $r = $chk->fetch(PDO::FETCH_ASSOC);
+                        if ($r) {
+                            $found = true;
+                            $usedIdCol = $idColCandidate;
+                            $resolvedIdValue = $tryVal;
+                            break 2;
+                        }
+                    } catch (PDOException $e) {
+                        // ignore and try next candidate
+                        continue;
+                    }
+                }
+            }
+
+            if (!$found) {
+                echo json_encode(['success' => false, 'message' => 'Pedido no encontrado con el id proporcionado']);
+                exit;
+            }
+
+            // Perform the update using the discovered id column
+            $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$usedIdCol} = ?");
+            $stmt->execute([$status, $resolvedIdValue]);
+            if ($stmt->rowCount() > 0) {
+                echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
+            } else {
+                // No rows affected: fetch current status to provide a clearer reason
+                try {
+                    $chk = $pdo->prepare("SELECT {$estadoCol} AS current_status FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
+                    $chk->execute([$resolvedIdValue]);
+                    $row = $chk->fetch(PDO::FETCH_ASSOC);
+                    $current = $row ? ($row['current_status'] ?? null) : null;
+                    echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current]);
+                } catch (PDOException $e) {
+                    echo json_encode(['success' => false, 'message' => 'No se actualizó (sin cambios)']);
+                }
+            }
         } catch (PDOException $e) { echo json_encode(['success' => false, 'message' => 'Error actualizando estado: ' . $e->getMessage()]); }
         exit;
     }
@@ -907,14 +1027,53 @@ try {
                     $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
                     $colsStmt->execute([$dbname]);
                     $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-                    $estadoCol = null; $idCol = null;
-                    foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['estado','estado_pedido','status'])) { $estadoCol = $c; } if (in_array($low, ['id_pedido','id','id_pedidos','idpedidos'])) { if ($idCol===null) $idCol = $c; } }
-                    if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
+                    $estadoCol = null;
+                    foreach ($cols as $c) {
+                        $low = strtolower($c);
+                        if (in_array($low, ['estado','estado_pedido','status'])) { $estadoCol = $c; break; }
+                    }
                     if ($estadoCol === null) { echo json_encode(['success' => false, 'message' => 'Tabla pedidos no tiene columna de estado']); exit; }
-                    $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$idCol} = ?");
-                    $stmt->execute([$status, $order_id]);
-                    if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
-                    else echo json_encode(['success' => false, 'message' => 'No se actualizó (id inexistente o mismo estado)']);
+
+                    $originalOrderId = (string)$order_id;
+                    $digitsOnly = preg_replace('/[^0-9]/', '', $originalOrderId);
+
+                    $candidateIdCols = [];
+                    foreach ($cols as $c) { $candidateIdCols[] = $c; }
+                    $preferred = ['ID_Pedido','ID_Pedidos','Id_Pedido','id_pedido','id_pedidos','id','ID','ID_Pedidos'];
+                    usort($candidateIdCols, function($a, $b) use ($preferred){
+                        $pa = array_search($a, $preferred);
+                        $pb = array_search($b, $preferred);
+                        if ($pa === false) $pa = 999;
+                        if ($pb === false) $pb = 999;
+                        return $pa - $pb;
+                    });
+
+                    $found = false; $usedIdCol = null; $resolvedIdValue = null;
+                    $tries = [$originalOrderId];
+                    if ($digitsOnly !== '' && $digitsOnly !== $originalOrderId) $tries[] = $digitsOnly;
+                    foreach ($candidateIdCols as $idColCandidate) {
+                        foreach ($tries as $tryVal) {
+                            $chk = $pdo->prepare("SELECT 1 FROM pedidos WHERE {$idColCandidate} = ? LIMIT 1");
+                            try { $chk->execute([$tryVal]); $r = $chk->fetch(PDO::FETCH_ASSOC); if ($r) { $found = true; $usedIdCol = $idColCandidate; $resolvedIdValue = $tryVal; break 2; } } catch (PDOException $e) { continue; }
+                        }
+                    }
+                    if (!$found) { echo json_encode(['success' => false, 'message' => 'Pedido no encontrado con el id proporcionado']); exit; }
+
+                    $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$usedIdCol} = ?");
+                    $stmt->execute([$status, $resolvedIdValue]);
+                    if ($stmt->rowCount() > 0) {
+                        echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
+                    } else {
+                        try {
+                            $chk = $pdo->prepare("SELECT {$estadoCol} AS current_status FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
+                            $chk->execute([$resolvedIdValue]);
+                            $row = $chk->fetch(PDO::FETCH_ASSOC);
+                            $current = $row ? ($row['current_status'] ?? null) : null;
+                            echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current]);
+                        } catch (PDOException $e) {
+                            echo json_encode(['success' => false, 'message' => 'No se actualizó (sin cambios)']);
+                        }
+                    }
                 } catch (PDOException $e) { echo json_encode(['success' => false, 'message' => 'Error actualizando estado: ' . $e->getMessage()]); }
                 exit;
             }
