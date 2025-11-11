@@ -446,8 +446,7 @@ try {
             $pdo->beginTransaction();
 
             // Insertar un único pedido que representa la orden completa
-            // Intentaremos guardar el primer ID_Menu en la columna Platillo para compatibilidad,
-            // pero consultaremos primero las columnas reales de la tabla `pedidos` para evitar errores
+
             $firstMenuId = null;
             if (isset($items[0])) {
                 $firstMenuId = $items[0]['id'] ?? ($items[0]['ID_Menu'] ?? null);
@@ -533,12 +532,7 @@ try {
                 throw $e; // subir el error para que el catch externo haga rollback
             }
 
-            // No insertar en detalle_pedido porque esa tabla no existe en este esquema;
-            // la dirección y teléfono se almacenaron directamente en la tabla `pedidos` cuando existe la columna.
 
-            // Preparar inserción en Platillos_Pedido (tabla existente en tu esquema)
-            // La tabla parece no tener AUTO_INCREMENT en la PK; para evitar 'Duplicate entry 0' asignamos
-            // manualmente IDs únicos dentro de la transacción usando SELECT MAX(...) FOR UPDATE.
             try {
                 $maxStmt = $pdo->prepare("SELECT COALESCE(MAX(ID_Platillos_Pedido), 0) AS maxid FROM Platillos_Pedido FOR UPDATE");
                 $maxStmt->execute();
