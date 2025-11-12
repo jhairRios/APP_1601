@@ -2,10 +2,14 @@ import 'package:flutter/material.dart';
 import 'dart:typed_data';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
+import 'dart:convert';
+import 'package:http/http.dart' as http;
+import '../services/api_config.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 import '../widgets/product_image_box.dart';
 import '../services/order_service.dart';
+import 'order_confirmation.dart';
 
 class EmpleadoScreen extends StatefulWidget {
   const EmpleadoScreen({Key? key}) : super(key: key);
@@ -35,6 +39,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   late StreamSubscription<bool> _menuSubscription;
   late StreamSubscription<Map<String, dynamic>> _orderSubscription;
   List<Map<String, dynamic>> _recentOrders = [];
+  int _pendingOrderCount = 0; // contador de pedidos nuevos no leídos
+  Timer? _pollTimer;
 
   @override
   void initState() {
@@ -48,11 +54,62 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     // Escuchar nuevos pedidos creados en la app (cliente)
     _orderSubscription = OrderService.orderStream.listen((order) {
       try {
+        // Debug print when empleado receives an order
+        // ignore: avoid_print
+        print('empleado: received order -> ${order.toString()}');
+
+        if (!mounted) return;
+        // Insertar de forma segura (si order no es Map, lo ignoramos)
+        Map<String, dynamic>? safeOrder;
+        try {
+          safeOrder = Map<String, dynamic>.from(order);
+        } catch (_) {
+          safeOrder = null;
+        }
+
         setState(() {
-          _recentOrders.insert(0, Map<String, dynamic>.from(order));
+          if (safeOrder != null) {
+            final normalized = _normalizeOrder(safeOrder);
+            // evitar duplicados por order_id
+            final incomingId = normalized['order_id']?.toString();
+            final exists = _recentOrders.any((r) => r['order_id']?.toString() == incomingId);
+            if (!exists) _recentOrders.insert(0, normalized);
+          }
+          // Incrementar contador de pedidos pendientes y notificar al usuario
+          _pendingOrderCount = (_pendingOrderCount) + 1;
         });
-      } catch (_) {}
+
+        // Mostrar SnackBar de notificación en un post-frame callback para evitar
+        // problemas si el Scaffold aún no está totalmente montado.
+        if (mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            try {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Nuevo pedido recibido (${_pendingOrderCount.toString()})'),
+                  duration: const Duration(seconds: 3),
+                  action: SnackBarAction(
+                    label: 'Ver',
+                    onPressed: () {
+                      if (!mounted) return;
+                      setState(() {
+                        _selectedIndex = 2; // ir a Pedidos
+                        _pendingOrderCount = 0; // marcar como leído al verlo
+                      });
+                    },
+                  ),
+                ),
+              );
+            } catch (_) {}
+          });
+        }
+      } catch (e) {
+        // ignore: avoid_print
+        print('empleado: order subscription error: $e');
+      }
     });
+    // Iniciar polling periódico para detectar pedidos pendientes desde el servidor
+    _startPolling();
   }
 
   @override
@@ -60,8 +117,268 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     try {
       _menuSubscription.cancel();
       _orderSubscription.cancel();
+      _stopPolling();
     } catch (_) {}
     super.dispose();
+  }
+
+  void _startPolling() {
+    try {
+      // Ejecutar una comprobación inmediata y luego periódicamente
+      _pollPendingOrders();
+      _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        _pollPendingOrders();
+      });
+    } catch (e) {
+      // ignore: avoid_print
+      print('empleado: error starting poll: $e');
+    }
+  }
+
+  void _stopPolling() {
+    try {
+      _pollTimer?.cancel();
+      _pollTimer = null;
+    } catch (_) {}
+  }
+
+  Future<void> _pollPendingOrders() async {
+    try {
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'action': 'get_pending_orders'}),
+      );
+      if (resp.statusCode != 200) return;
+      final decoded = json.decode(resp.body);
+      List<dynamic> ordersRaw = [];
+      if (decoded is List) {
+        ordersRaw = decoded;
+      } else if (decoded is Map) {
+        if (decoded['orders'] != null)
+          ordersRaw = decoded['orders'];
+        else if (decoded['data'] != null)
+          ordersRaw = decoded['data'];
+        else if (decoded['pedidos'] != null)
+          ordersRaw = decoded['pedidos'];
+      }
+
+      if (ordersRaw.isEmpty) return;
+
+      // Normalize and merge new orders into _recentOrders avoiding duplicates
+      final fetched = List<Map<String, dynamic>>.from(
+        ordersRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
+      );
+
+      int newCount = 0;
+      setState(() {
+        for (final o in fetched.reversed) {
+          final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
+          final oid = normalized['order_id']?.toString();
+          final exists = oid != null && _recentOrders.any((r) => r['order_id']?.toString() == oid);
+          if (!exists) {
+            _recentOrders.insert(0, normalized);
+            newCount++;
+          }
+        }
+        if (newCount > 0) {
+          _pendingOrderCount = (_pendingOrderCount) + newCount;
+        }
+      });
+    } catch (e) {
+      // ignore: avoid_print
+      print('empleado: poll error: $e');
+    }
+  }
+
+  String _formatOrderLabel(String raw) {
+    final s = raw.toString();
+    if (s.toLowerCase().startsWith('pedido')) return s;
+    if (s.startsWith('#')) return 'Pedido $s';
+    return 'Pedido #$s';
+  }
+
+  Widget _buildInteractiveStatusBar(Map<String, dynamic> order) {
+    final List<String> steps = ['Confirmado', 'Preparando', 'En Camino', 'Entregado'];
+    final current = (order['status'] ?? order['Estado_Pedido'] ?? order['estado'] ?? order['status_label'] ?? '').toString();
+    int currentIndex = steps.indexOf(current);
+    if (currentIndex < 0) {
+      // try mapping common alternatives
+      final low = current.toLowerCase();
+      if (low.contains('pend')) currentIndex = 0;
+      else if (low.contains('prepar')) currentIndex = 1;
+      else if (low.contains('camino') || low.contains('entrega') || low.contains('en camino')) currentIndex = 2;
+      else if (low.contains('entreg')) currentIndex = 3;
+      else currentIndex = 0;
+    }
+
+    return Row(
+      children: steps.asMap().entries.map((entry) {
+        final idx = entry.key;
+        final label = entry.value;
+        final isActive = idx <= currentIndex;
+        return Expanded(
+          child: GestureDetector(
+            onTap: () async {
+              try {
+                final orderId = (order['order_id'] ?? order['ID_Pedido'] ?? order['id'] ?? order['ID'] ?? '').toString();
+                await _updateOrderStatus(orderId, label);
+              } catch (e) {
+                // ignore
+              }
+            },
+            child: Column(
+              children: [
+                Container(
+                  width: 20,
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: isActive ? Colors.green : Colors.grey[300],
+                    shape: BoxShape.circle,
+                  ),
+                  child: isActive ? const Icon(Icons.check, color: Colors.white, size: 12) : null,
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  label,
+                  style: TextStyle(fontSize: 12, color: isActive ? Colors.black : Colors.grey[600]),
+                  textAlign: TextAlign.center,
+                ),
+                if (idx < steps.length - 1)
+                  Container(
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                    color: idx < currentIndex ? Colors.green : Colors.grey[300],
+                    width: double.infinity,
+                  ),
+              ],
+            ),
+          ),
+        );
+      }).toList(),
+    );
+  }
+
+  Future<void> _updateOrderStatus(String orderId, String status) async {
+    try {
+  final sanitizedOrderId = orderId.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'update_order_status',
+          'order_id': sanitizedOrderId,
+          'status': status,
+        }),
+      );
+      if (resp.statusCode == 200) {
+        final decoded = json.decode(resp.body);
+        if (decoded != null && decoded['success'] == true) {
+          // actualizar orden localmente
+          setState(() {
+            final idx = _recentOrders.indexWhere((r) => (r['order_id']?.toString() ?? r['ID_Pedido']?.toString() ?? '') == sanitizedOrderId);
+            if (idx >= 0) {
+              _recentOrders[idx]['status'] = status;
+            }
+          });
+          // Notificar a otras pantallas en la app
+          try {
+            final notify = {
+              'order_id': sanitizedOrderId,
+              'status': status,
+            };
+            OrderService.notifyNewOrder(notify);
+          } catch (_) {}
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Estado actualizado: $status')));
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo actualizar: ${resp.body}')));
+        }
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('HTTP ${resp.statusCode}')));
+      }
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de red: $e')));
+    }
+  }
+
+  // Normaliza diferentes formatos de pedidos entrantes a un mapa con claves estandarizadas
+  Map<String, dynamic> _normalizeOrder(Map<String, dynamic> src) {
+    final m = <String, dynamic>{};
+
+    String? pickFirst(List<String> candidates) {
+      for (final k in candidates) {
+        if (src.containsKey(k) && src[k] != null) return src[k].toString();
+      }
+      // try lowercase keys
+      for (final entry in src.entries) {
+        final lk = entry.key.toString().toLowerCase();
+        for (final k in candidates) {
+          if (lk == k.toLowerCase()) return entry.value?.toString();
+        }
+      }
+      return null;
+    }
+
+    // order id
+    final id = pickFirst([
+      'order_id',
+      'ID_Pedido',
+      'ID_Pedidos',
+      'id_pedido',
+      'id',
+      'ID',
+      'pedido_id',
+    ]);
+    m['order_id'] = id ?? src.values.map((e) => e?.toString()).firstWhere((_) => true, orElse: () => null);
+
+    // customer / nombre
+    var customer = pickFirst([
+      'customer',
+      'cliente',
+      'nombre',
+      'name',
+      'usuario',
+      'nombre_usuario',
+      'nombre_cliente',
+      'user_name',
+      'email',
+    ]);
+    // sanitize accidental file paths or screenclip strings
+    if (customer != null) {
+      final lower = customer.toLowerCase();
+      if (customer.contains('\\') || lower.contains('screencap') || lower.contains('screenclip') || RegExp(r'^[a-zA-Z]:\\').hasMatch(customer)) {
+        customer = null;
+      }
+    }
+    m['customer'] = customer ?? 'Cliente';
+
+    // table / mesa
+    m['table'] = pickFirst(['table', 'mesa', 'numero_mesa', 'mesa_numero']) ?? '';
+
+    // ubicacion / direccion
+    m['ubicacion'] = pickFirst([
+      'ubicacion',
+      'direccion',
+      'direccion_entrega',
+      'direccion_envio',
+      'address'
+    ]) ?? '';
+
+    // state/status
+    m['status'] = pickFirst(['status', 'estado', 'estado_pedido']) ?? src['status']?.toString() ?? 'Pendiente';
+
+    // total
+    m['total'] = pickFirst(['total', 'monto', 'precio', 'Total']) ?? src['total'];
+
+    // payment method
+    m['payment_method'] = pickFirst(['payment_method', 'metodo_pago', 'pago', 'payment']) ?? '';
+
+    // preserve other keys just in case
+    for (final entry in src.entries) {
+      if (!m.containsKey(entry.key)) m[entry.key] = entry.value;
+    }
+
+    return m;
   }
 
   Future<void> _fetchCategorias() async {
@@ -1400,24 +1717,62 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         onTap: (index) {
           setState(() {
             _selectedIndex = index;
+            if (index == 2) {
+              // Ver pedidos: marcar como leídos
+              _pendingOrderCount = 0;
+            }
           });
         },
-        items: const [
-          BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Inicio'),
-          BottomNavigationBarItem(
+        items: [
+          const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Inicio'),
+          const BottomNavigationBarItem(
             icon: Icon(Icons.restaurant_menu),
             label: 'Menú',
           ),
           BottomNavigationBarItem(
-            icon: Icon(Icons.shopping_cart),
+            icon: _buildOrderIcon(),
             label: 'Pedidos',
           ),
-          BottomNavigationBarItem(
+          const BottomNavigationBarItem(
             icon: Icon(Icons.delivery_dining),
             label: 'Repartidores',
           ),
         ],
       ),
+    );
+  }
+
+  // Icono de Pedidos con contador (badge)
+  Widget _buildOrderIcon() {
+    if (_pendingOrderCount <= 0) {
+      return const Icon(Icons.shopping_cart);
+    }
+
+    // Mostrar icono con badge
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        const Icon(Icons.shopping_cart),
+        Positioned(
+          right: -6,
+          top: -6,
+          child: Container(
+            padding: const EdgeInsets.all(2),
+            decoration: BoxDecoration(
+              color: Colors.red,
+              borderRadius: BorderRadius.circular(10),
+              border: Border.all(color: Colors.white, width: 1.5),
+            ),
+            constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+            child: Center(
+              child: Text(
+                _pendingOrderCount > 99 ? '99+' : _pendingOrderCount.toString(),
+                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 
@@ -1824,21 +2179,26 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             const SizedBox(height: 8),
             Column(
               children: _recentOrders.map((o) {
-                final orderNumber = o['order_id']?.toString() ?? 'Pedido';
-                final customer = o['customer']?.toString() ?? 'Cliente';
-                final table = o['table']?.toString() ?? o['ubicacion']?.toString() ?? '';
-                final status = o['status']?.toString() ?? 'Pendiente';
-                final total = o['total'] != null ? '\$${o['total']}' : '\$0.00';
-                final payment = o['payment_method']?.toString() ?? '';
+                final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
+                final orderNumber = normalized['order_id']?.toString() ?? 'Pedido';
+                final customer = normalized['customer']?.toString() ?? 'Cliente';
+                final table = normalized['table']?.toString() ?? '';
+                final ubicacion = normalized['ubicacion']?.toString() ?? '';
+                final isDelivery = ubicacion.isNotEmpty;
+                final status = normalized['status']?.toString() ?? 'Pendiente';
+                final total = normalized['total'] != null ? '\$${normalized['total']}' : '\$0.00';
+                final payment = normalized['payment_method']?.toString() ?? '';
                 return _buildOrderCard(
                   orderNumber,
                   customer,
-                  table,
+                  isDelivery ? ubicacion : table,
                   status,
                   total,
+                  isDelivery,
                   colorPrimario,
                   colorNaranja,
                   payment,
+                  normalized,
                 );
               }).toList(),
             ),
@@ -1857,9 +2217,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 'Mesa ${index + 1}',
                 _getOrderStatus(index),
                 '\$${(index + 1) * 25}.00',
+                false,
                 colorPrimario,
                 colorNaranja,
                 '',
+                null,
               );
             },
           ),
@@ -2072,9 +2434,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     String table,
     String status,
     String total,
+    bool isDelivery,
     Color colorPrimario,
     Color colorNaranja,
     String? paymentMethod,
+    Map<String, dynamic>? rawOrder,
   ) {
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -2098,7 +2462,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Text(
-                orderNumber,
+                _formatOrderLabel(orderNumber),
                 style: const TextStyle(
                   fontSize: 16,
                   fontWeight: FontWeight.bold,
@@ -2123,11 +2487,19 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           ),
           const SizedBox(height: 8),
           Text('Cliente: $customer'),
-          Text('Mesa: $table'),
+          if (table.isNotEmpty) ...[
+            if (isDelivery)
+              Text('Ubicación: $table')
+            else
+              Text('Mesa: $table'),
+          ],
           if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
             const SizedBox(height: 6),
             Text('Pago: $paymentMethod', style: const TextStyle(fontWeight: FontWeight.w500)),
           ],
+          const SizedBox(height: 12),
+          // Barra de estado interactiva para empleados
+          _buildInteractiveStatusBar(rawOrder ?? {'status': status, 'order_id': orderNumber}),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2142,7 +2514,46 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               ),
               ElevatedButton(
                 onPressed: () {
-                  // Ver detalles del pedido
+                  // Ver detalles del pedido: abrir pantalla de detalles con la información disponible
+                  try {
+                    final items = rawOrder != null
+                        ? List<dynamic>.from(rawOrder['items'] ?? [])
+                        : <dynamic>[];
+                    final double parsedTotal = (() {
+                      try {
+                        final t = rawOrder != null ? (rawOrder['total'] ?? rawOrder['Total']) : null;
+                        if (t == null) return 0.0;
+                        return double.tryParse(t.toString()) ?? 0.0;
+                      } catch (_) {
+                        return 0.0;
+                      }
+                    })();
+                    final ubic = rawOrder != null
+                        ? (rawOrder['ubicacion'] ?? rawOrder['Ubicacion'] ?? rawOrder['direccion'] ?? '')
+                            .toString()
+                        : '';
+                    final telefono = rawOrder != null
+                        ? (rawOrder['telefono'] ?? rawOrder['Telefono'] ?? rawOrder['phone'] ?? '')
+                            .toString()
+                        : '';
+                    final mesa = rawOrder != null
+                        ? (rawOrder['table'] ?? rawOrder['mesa'] ?? rawOrder['Mesa'] ?? '')
+                            .toString()
+                        : '';
+                    Navigator.of(context).push(MaterialPageRoute(
+                      builder: (_) => OrderConfirmationScreen(
+                        orderId: orderNumber,
+                        items: items,
+                        total: parsedTotal,
+                        ubicacion: ubic,
+                        telefono: telefono,
+                        mesa: mesa,
+                      ),
+                    ));
+                  } catch (e) {
+                    // ignore: avoid_print
+                    print('empleado: error opening details $e');
+                  }
                 },
                 style: ElevatedButton.styleFrom(
                   backgroundColor: colorPrimario,
@@ -2248,7 +2659,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  orderNumber,
+                  _formatOrderLabel(orderNumber),
                   style: const TextStyle(
                     fontSize: 16,
                     fontWeight: FontWeight.bold,

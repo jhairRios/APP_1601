@@ -191,6 +191,7 @@ class _ClienteScreenState extends State<ClienteScreen>
   // Mis pedidos locales (cargados desde la API usando los order_ids guardados)
   List<Map<String, dynamic>>? _myOrders;
   late StreamSubscription<bool> _menuSubscription;
+  late StreamSubscription<Map<String, dynamic>> _orderSubscription;
   // Indica si ya se abrió automáticamente el formulario al entrar
   bool _openedRestauranteForm = false;
 
@@ -218,6 +219,26 @@ class _ClienteScreenState extends State<ClienteScreen>
     _fadeAnimation = Tween<double>(begin: 0.0, end: 1.0).animate(
       CurvedAnimation(parent: _fadeController, curve: Curves.easeInOut),
     );
+    // escuchar cambios de pedidos vía broadcast (empleados actualizando status)
+    _orderSubscription = OrderService.orderStream.listen((order) {
+      try {
+        final oid = (order['order_id'] ?? order['ID_Pedido'] ?? order['id'] ?? '').toString();
+        final newStatus = (order['status'] ?? order['Estado_Pedido'] ?? order['estado'] ?? order['status_label'] ?? '').toString();
+        if (oid.isEmpty || newStatus.isEmpty) return;
+        if (_myOrders == null) return;
+        bool changed = false;
+        for (final entry in _myOrders!) {
+          final eOrderId = (entry['order_id'] ?? entry['pedido']?['ID_Pedido'] ?? entry['pedido']?['Id_Pedido'] ?? entry['pedido']?['id'] ?? '').toString();
+          if (eOrderId == oid) {
+            entry['pedido'] ??= {};
+            entry['pedido']['Estado_Pedido'] = newStatus;
+            entry['pedido']['estado'] = newStatus;
+            changed = true;
+          }
+        }
+        if (changed) setState(() {});
+      } catch (_) {}
+    });
 
     // Nota: las animaciones específicas de escala/slide se controlan directamente
     // usando los AnimationControllers cuando se necesitan en tiempo de ejecución.
@@ -242,6 +263,9 @@ class _ClienteScreenState extends State<ClienteScreen>
   void dispose() {
     try {
       _menuSubscription.cancel();
+      try {
+        _orderSubscription.cancel();
+      } catch (_) {}
     } catch (_) {}
     _fadeController.dispose();
     _scaleController.dispose();
@@ -1177,6 +1201,7 @@ class _ClienteScreenState extends State<ClienteScreen>
                                       telefono:
                                           pedido['Telefono'] ??
                                           pedido['telefono'],
+                                      mesa: pedido['Mesa'] ?? pedido['mesa'],
                                     ),
                                   ),
                                 );
@@ -1210,6 +1235,7 @@ class _ClienteScreenState extends State<ClienteScreen>
                                         telefono:
                                             pedido['Telefono'] ??
                                             pedido['telefono'],
+                                        mesa: pedido['Mesa'] ?? pedido['mesa'],
                                       ),
                                     ),
                                   );
@@ -1409,6 +1435,7 @@ class _ClienteScreenState extends State<ClienteScreen>
                                                 total: confirmedTotal,
                                                 ubicacion: confirmedUbicacion,
                                                 telefono: confirmedTelefono,
+                                                mesa: null,
                                               ),
                                         ),
                                       );
@@ -1435,15 +1462,22 @@ class _ClienteScreenState extends State<ClienteScreen>
                                       } catch (_) {}
                                       // Notificar a la app (empleado/admin) sobre el nuevo pedido
                                       try {
-                                        OrderService.notifyNewOrder({
+                                        final prefsNotify = await SharedPreferences.getInstance();
+                                        final customerName = prefsNotify.getString('user_name') ?? prefsNotify.getString('saved_email') ?? prefsNotify.getString('user_id') ?? 'Cliente';
+                                        final notifyPayload = {
                                           'order_id': orderId,
+                                          'customer': customerName,
                                           'items': confirmedItems,
                                           'total': confirmedTotal,
                                           'ubicacion': confirmedUbicacion,
                                           'telefono': confirmedTelefono,
                                           'payment_method': selectedPayment,
                                           'status': 'Pendiente',
-                                        });
+                                        };
+                                        // Debug print antes de notificar
+                                        // ignore: avoid_print
+                                        print('cliente: notify new order -> ${notifyPayload.toString()}');
+                                        OrderService.notifyNewOrder(notifyPayload);
                                       } catch (_) {}
                                     } else {
                                       final msg =
@@ -2149,32 +2183,60 @@ class _ClienteScreenState extends State<ClienteScreen>
     Color colorNaranja,
   ) {
     final steps = ['Confirmado', 'Preparando', 'En Camino', 'Entregado'];
+    final icons = [Icons.check_circle_outline, Icons.kitchen, Icons.local_shipping, Icons.home];
     final currentStep = steps.indexOf(status);
 
     return Row(
       children: steps.asMap().entries.map((entry) {
         final index = entry.key;
+        final label = entry.value;
         final isCompleted = index <= currentStep;
 
         return Expanded(
           child: Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              Container(
-                width: 20,
-                height: 20,
-                decoration: BoxDecoration(
-                  color: isCompleted ? colorVerde : Colors.grey[300],
-                  shape: BoxShape.circle,
-                ),
-                child: isCompleted
-                    ? const Icon(Icons.check, color: Colors.white, size: 12)
-                    : null,
+              // Icon + label stacked vertically
+              Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: isCompleted ? colorVerde : Colors.grey[300],
+                      shape: BoxShape.circle,
+                    ),
+                    child: Center(
+                      child: Icon(
+                        icons[index],
+                        size: 18,
+                        color: isCompleted ? Colors.white : Colors.grey[700],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  SizedBox(
+                    width: 70,
+                    child: Text(
+                      label,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: isCompleted ? Colors.black : Colors.grey[600],
+                      ),
+                      textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                  ),
+                ],
               ),
               if (index < steps.length - 1)
                 Expanded(
                   child: Container(
-                    height: 2,
-                    color: isCompleted ? colorVerde : Colors.grey[300],
+                    height: 4,
+                    margin: const EdgeInsets.symmetric(horizontal: 8),
+                    color: index < currentStep ? colorVerde : Colors.grey[300],
                   ),
                 ),
             ],

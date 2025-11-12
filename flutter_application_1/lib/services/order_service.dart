@@ -9,8 +9,14 @@ class OrderService {
 
   static void notifyNewOrder(Map<String, dynamic> order) {
     try {
+      // Debug log to help trace notifications
+      // ignore: avoid_print
+      print('OrderService.notifyNewOrder -> ${order.toString()}');
       _orderController.add(order);
-    } catch (_) {}
+    } catch (e) {
+      // ignore: avoid_print
+      print('OrderService.notifyNewOrder error: $e');
+    }
   }
 
   /// Close the controller if needed (not called by default).

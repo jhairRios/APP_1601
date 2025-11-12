@@ -9,6 +9,7 @@ class OrderConfirmationScreen extends StatefulWidget {
   final double? total;
   final String? ubicacion;
   final String? telefono;
+  final String? mesa;
 
   const OrderConfirmationScreen({
     Key? key,
@@ -17,6 +18,7 @@ class OrderConfirmationScreen extends StatefulWidget {
     this.total,
     this.ubicacion,
     this.telefono,
+    this.mesa,
   }) : super(key: key);
 
   @override
@@ -30,6 +32,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
   double _total = 0.0;
   String _ubicacion = '';
   String _telefono = '';
+  String _mesa = '';
 
   @override
   void initState() {
@@ -86,6 +89,7 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                     pedido['ubicacion'] ??
                     widget.ubicacion) ??
                 '';
+            _mesa = (pedido['Mesa'] ?? pedido['mesa'] ?? widget.mesa) ?? '';
             _telefono =
                 (pedido['Telefono'] ?? pedido['telefono'] ?? widget.telefono) ??
                 '';
@@ -95,11 +99,12 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
         }
       }
       // Si no fue posible obtener del servidor, fallback a los datos pasados
-      setState(() {
+        setState(() {
         _items = widget.items ?? [];
         _total = widget.total ?? 0.0;
         _ubicacion = widget.ubicacion ?? '';
         _telefono = widget.telefono ?? '';
+        _mesa = widget.mesa ?? '';
         _loading = false;
       });
     } catch (e) {
@@ -134,9 +139,12 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                     ),
                   ),
                   const SizedBox(height: 12),
-                  Text(
-                    'Dirección: ${_ubicacion.isNotEmpty ? _ubicacion : '-'}',
-                  ),
+                  if (_ubicacion.isNotEmpty)
+                    Text('Dirección: ${_ubicacion}')
+                  else if (_mesa.isNotEmpty)
+                    Text('Mesa: ${_mesa}')
+                  else
+                    Text('Dirección/Mesa: -'),
                   const SizedBox(height: 4),
                   Text('Teléfono: ${_telefono.isNotEmpty ? _telefono : '-'}'),
                   const SizedBox(height: 12),
