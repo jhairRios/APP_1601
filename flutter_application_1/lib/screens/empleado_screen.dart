@@ -29,6 +29,72 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     return 'No Disponible';
   }
 
+  Future<void> _showRepartidorDetails(Map<String, dynamic> r) async {
+    final repId = r['ID_Repartidor'] ?? r['id'] ?? r['ID'] ?? r['Id'] ?? r['id_repartidor'];
+    if (repId == null) {
+      // mostrar dialog con info mínima
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Repartidor'),
+          content: Text('No se pudo identificar el ID del repartidor.'),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
+        ),
+      );
+      return;
+    }
+
+    try {
+      final resp = await http.post(Uri.parse(API_BASE_URL), headers: {'Content-Type': 'application/json'}, body: json.encode({'action': 'get_repartidor_orders', 'repartidor_id': repId}));
+      if (resp.statusCode != 200) {
+        showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Error'), content: const Text('Error al obtener pedidos.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))]));
+        return;
+      }
+      final decoded = json.decode(resp.body);
+      List<dynamic> orders = [];
+      if (decoded is Map && decoded['orders'] != null) orders = decoded['orders'];
+      else if (decoded is List) orders = decoded;
+
+      // Mostrar en dialog lista de pedidos asignados
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: Text('Pedidos de ${r['Nombre'] ?? r['nombre'] ?? 'Repartidor'}'),
+          content: SizedBox(
+            width: double.maxFinite,
+            child: orders.isEmpty
+                ? const Text('No hay pedidos asignados')
+                : ListView.builder(
+                    shrinkWrap: true,
+                    itemCount: orders.length,
+                    itemBuilder: (context, i) {
+                      final o = orders[i] as Map<String, dynamic>;
+                      final id = o['ID_Pedido'] ?? o['id'] ?? o['order_id'] ?? o['ID'] ?? o['Id'] ?? '—';
+                      final cliente = o['Cliente'] ?? o['cliente'] ?? o['customer'] ?? '';
+                      final estado = o['Estado_Pedido'] ?? o['estado'] ?? o['status'] ?? '';
+                      return ListTile(
+                        dense: true,
+                        title: Text(_formatOrderLabel(id.toString())),
+                        subtitle: Text('${cliente.toString()} • ${estado.toString()}'),
+                        onTap: () {
+                          Navigator.pop(context);
+                          // opcional: abrir detalle del pedido
+                          try {
+                            Navigator.push(context, MaterialPageRoute(builder: (_) => OrderConfirmationScreen(orderId: id.toString(), mesa: o['Mesa'] ?? o['mesa'] ?? o['ubicacion'] ?? null, telefono: o['Telefono'] ?? o['telefono'] ?? null)));
+                          } catch (_) {}
+                        },
+                      );
+                    },
+                  ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
+        ),
+      );
+    } catch (e) {
+      showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Error'), content: Text('Error: $e'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))]));
+    }
+  }
+
   // Devuelve el estado textual del platillo según el ID_Estado
 
   List<Map<String, dynamic>> categorias = <Map<String, dynamic>>[];
@@ -41,6 +107,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   List<Map<String, dynamic>> _recentOrders = [];
   int _pendingOrderCount = 0; // contador de pedidos nuevos no leídos
   Timer? _pollTimer;
+  List<Map<String, dynamic>> _repartidores = [];
 
   @override
   void initState() {
@@ -110,6 +177,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     });
     // Iniciar polling periódico para detectar pedidos pendientes desde el servidor
     _startPolling();
+    // Cargar lista de repartidores inicialmente
+    _loadRepartidores();
   }
 
   @override
@@ -185,9 +254,38 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           _pendingOrderCount = (_pendingOrderCount) + newCount;
         }
       });
+
+      // Refrescar repartidores también para mantener contadores actualizados
+      _loadRepartidores();
     } catch (e) {
       // ignore: avoid_print
       print('empleado: poll error: $e');
+    }
+  }
+
+  Future<void> _loadRepartidores() async {
+    try {
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'action': 'get_repartidores'}),
+      );
+      if (resp.statusCode != 200) return;
+      final decoded = json.decode(resp.body);
+      List<dynamic> reps = [];
+      if (decoded is Map && decoded['repartidores'] != null) reps = decoded['repartidores'];
+      else if (decoded is List) reps = decoded;
+
+      final list = List<Map<String, dynamic>>.from(
+        reps.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
+      );
+      if (!mounted) return;
+      setState(() {
+        _repartidores = list;
+      });
+    } catch (e) {
+      // ignore: avoid_print
+      print('empleado: load repartidores error: $e');
     }
   }
 
@@ -2264,20 +2362,14 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             scrollDirection: Axis.horizontal,
             padding: const EdgeInsets.symmetric(horizontal: 4),
             child: Row(
-              children: [
-                _buildRepartidorCard('Juan Pérez', 'Disponible', colorAzul),
-                _buildRepartidorCard('María García', 'En ruta', colorAzul),
-                _buildRepartidorCard('Carlos López', 'Disponible', colorAzul),
-                _buildRepartidorCard('Ana Martínez', 'En ruta', colorAzul),
-                _buildRepartidorCard('Luis Rodríguez', 'Disponible', colorAzul),
-                _buildRepartidorCard(
-                  'Sofia Hernández',
-                  'Disponible',
-                  colorAzul,
-                ),
-                _buildRepartidorCard('Miguel Torres', 'En ruta', colorAzul),
-                _buildRepartidorCard('Elena Vargas', 'Disponible', colorAzul),
-              ],
+              children: _repartidores.isEmpty
+                  ? [
+                      _buildRepartidorCard('Juan Pérez', 'Disponible', colorAzul),
+                      _buildRepartidorCard('María García', 'En ruta', colorAzul),
+                      _buildRepartidorCard('Carlos López', 'Disponible', colorAzul),
+                      _buildRepartidorCard('Ana Martínez', 'En ruta', colorAzul),
+                    ]
+                  : _repartidores.map<Widget>((r) => _buildRepartidorCardFromData(r, colorAzul)).toList(),
             ),
           ),
 
@@ -2627,6 +2719,87 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         ],
       ), //hola
     ); //drgdrgdrsefsef
+  }
+
+  Widget _buildRepartidorCardFromData(Map<String, dynamic> r, Color colorAzul) {
+    final name = (r['Nombre'] ?? r['nombre'] ?? r['name'] ?? r['ID_Repartidor'] ?? r['ID'] ?? 'Repartidor').toString();
+    final estadoRaw = r['Estado_Repartidor'] ?? r['estado'] ?? r['status'] ?? 0;
+    final bool disponible = (estadoRaw.toString() == '1' || estadoRaw.toString().toLowerCase() == '1' || estadoRaw.toString().toLowerCase() == 'disponible');
+    final assigned = r['assigned_count'] ?? r['assigned'] ?? r['assignedCount'] ?? 0;
+    final statusLabel = disponible ? 'Disponible' : 'Ocupado';
+
+    return InkWell(
+      onTap: () => _showRepartidorDetails(r),
+      child: Container(
+        width: 140,
+        height: 120,
+        margin: const EdgeInsets.only(right: 12),
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(12),
+          boxShadow: [
+            BoxShadow(
+              color: Colors.grey.withOpacity(0.1),
+              spreadRadius: 1,
+              blurRadius: 4,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            CircleAvatar(
+              radius: 20,
+              backgroundColor: colorAzul.withOpacity(0.1),
+              child: Icon(Icons.person, color: colorAzul),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              name,
+              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+              textAlign: TextAlign.center,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: disponible ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    statusLabel,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: disponible ? Colors.green : Colors.orange,
+                      fontWeight: FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  decoration: BoxDecoration(
+                    color: Colors.grey.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Text(
+                    '${assigned.toString()} pedidos',
+                    style: const TextStyle(fontSize: 10, color: Colors.black87, fontWeight: FontWeight.w500),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
   Widget _buildReadyOrderCard(
