@@ -5,6 +5,7 @@ import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
+import '../widgets/repartidores_list.dart';
 import '../services/menu_service.dart';
 import '../widgets/flexible_image.dart';
 import '../widgets/product_image_box.dart';
@@ -30,7 +31,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   }
 
   Future<void> _showRepartidorDetails(Map<String, dynamic> r) async {
-    final repId = r['ID_Repartidor'] ?? r['id'] ?? r['ID'] ?? r['Id'] ?? r['id_repartidor'];
+    final repId =
+        r['ID_Repartidor'] ??
+        r['id'] ??
+        r['ID'] ??
+        r['Id'] ??
+        r['id_repartidor'];
     if (repId == null) {
       // mostrar dialog con info mínima
       showDialog(
@@ -38,28 +44,56 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         builder: (_) => AlertDialog(
           title: const Text('Repartidor'),
           content: Text('No se pudo identificar el ID del repartidor.'),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
         ),
       );
       return;
     }
 
     try {
-      final resp = await http.post(Uri.parse(API_BASE_URL), headers: {'Content-Type': 'application/json'}, body: json.encode({'action': 'get_repartidor_orders', 'repartidor_id': repId}));
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({
+          'action': 'get_repartidor_orders',
+          'repartidor_id': repId,
+        }),
+      );
       if (resp.statusCode != 200) {
-        showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Error'), content: const Text('Error al obtener pedidos.'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))]));
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('Error'),
+            content: const Text('Error al obtener pedidos.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cerrar'),
+              ),
+            ],
+          ),
+        );
         return;
       }
       final decoded = json.decode(resp.body);
       List<dynamic> orders = [];
-      if (decoded is Map && decoded['orders'] != null) orders = decoded['orders'];
-      else if (decoded is List) orders = decoded;
+      if (decoded is Map && decoded['orders'] != null)
+        orders = decoded['orders'];
+      else if (decoded is List)
+        orders = decoded;
 
       // Mostrar en dialog lista de pedidos asignados
       showDialog(
         context: context,
         builder: (_) => AlertDialog(
-          title: Text('Pedidos de ${r['Nombre'] ?? r['nombre'] ?? 'Repartidor'}'),
+          title: Text(
+            'Pedidos de ${r['Nombre'] ?? r['nombre'] ?? 'Repartidor'}',
+          ),
           content: SizedBox(
             width: double.maxFinite,
             child: orders.isEmpty
@@ -69,29 +103,73 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                     itemCount: orders.length,
                     itemBuilder: (context, i) {
                       final o = orders[i] as Map<String, dynamic>;
-                      final id = o['ID_Pedido'] ?? o['id'] ?? o['order_id'] ?? o['ID'] ?? o['Id'] ?? '—';
-                      final cliente = o['Cliente'] ?? o['cliente'] ?? o['customer'] ?? '';
-                      final estado = o['Estado_Pedido'] ?? o['estado'] ?? o['status'] ?? '';
+                      final id =
+                          o['ID_Pedido'] ??
+                          o['id'] ??
+                          o['order_id'] ??
+                          o['ID'] ??
+                          o['Id'] ??
+                          '—';
+                      final cliente =
+                          o['Cliente'] ?? o['cliente'] ?? o['customer'] ?? '';
+                      final estado =
+                          o['Estado_Pedido'] ??
+                          o['estado'] ??
+                          o['status'] ??
+                          '';
                       return ListTile(
                         dense: true,
                         title: Text(_formatOrderLabel(id.toString())),
-                        subtitle: Text('${cliente.toString()} • ${estado.toString()}'),
+                        subtitle: Text(
+                          '${cliente.toString()} • ${estado.toString()}',
+                        ),
                         onTap: () {
                           Navigator.pop(context);
                           // opcional: abrir detalle del pedido
                           try {
-                            Navigator.push(context, MaterialPageRoute(builder: (_) => OrderConfirmationScreen(orderId: id.toString(), mesa: o['Mesa'] ?? o['mesa'] ?? o['ubicacion'] ?? null, telefono: o['Telefono'] ?? o['telefono'] ?? null)));
+                            Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => OrderConfirmationScreen(
+                                  orderId: id.toString(),
+                                  mesa:
+                                      o['Mesa'] ??
+                                      o['mesa'] ??
+                                      o['ubicacion'] ??
+                                      null,
+                                  telefono:
+                                      o['Telefono'] ?? o['telefono'] ?? null,
+                                ),
+                              ),
+                            );
                           } catch (_) {}
                         },
                       );
                     },
                   ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))],
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
         ),
       );
     } catch (e) {
-      showDialog(context: context, builder: (_) => AlertDialog(title: const Text('Error'), content: Text('Error: $e'), actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Cerrar'))]));
+      showDialog(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('Error'),
+          content: Text('Error: $e'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cerrar'),
+            ),
+          ],
+        ),
+      );
     }
   }
 
@@ -139,7 +217,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             final normalized = _normalizeOrder(safeOrder);
             // evitar duplicados por order_id
             final incomingId = normalized['order_id']?.toString();
-            final exists = _recentOrders.any((r) => r['order_id']?.toString() == incomingId);
+            final exists = _recentOrders.any(
+              (r) => r['order_id']?.toString() == incomingId,
+            );
             if (!exists) _recentOrders.insert(0, normalized);
           }
           // Incrementar contador de pedidos pendientes y notificar al usuario
@@ -153,7 +233,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             try {
               ScaffoldMessenger.of(context).showSnackBar(
                 SnackBar(
-                  content: Text('Nuevo pedido recibido (${_pendingOrderCount.toString()})'),
+                  content: Text(
+                    'Nuevo pedido recibido (${_pendingOrderCount.toString()})',
+                  ),
                   duration: const Duration(seconds: 3),
                   action: SnackBarAction(
                     label: 'Ver',
@@ -236,7 +318,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
       // Normalize and merge new orders into _recentOrders avoiding duplicates
       final fetched = List<Map<String, dynamic>>.from(
-        ordersRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
+        ordersRaw.map(
+          (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
+        ),
       );
 
       int newCount = 0;
@@ -244,7 +328,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         for (final o in fetched.reversed) {
           final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
           final oid = normalized['order_id']?.toString();
-          final exists = oid != null && _recentOrders.any((r) => r['order_id']?.toString() == oid);
+          final exists =
+              oid != null &&
+              _recentOrders.any((r) => r['order_id']?.toString() == oid);
           if (!exists) {
             _recentOrders.insert(0, normalized);
             newCount++;
@@ -273,8 +359,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       if (resp.statusCode != 200) return;
       final decoded = json.decode(resp.body);
       List<dynamic> reps = [];
-      if (decoded is Map && decoded['repartidores'] != null) reps = decoded['repartidores'];
-      else if (decoded is List) reps = decoded;
+      if (decoded is Map && decoded['repartidores'] != null)
+        reps = decoded['repartidores'];
+      else if (decoded is List)
+        reps = decoded;
 
       final list = List<Map<String, dynamic>>.from(
         reps.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
@@ -297,17 +385,35 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   }
 
   Widget _buildInteractiveStatusBar(Map<String, dynamic> order) {
-    final List<String> steps = ['Confirmado', 'Preparando', 'En Camino', 'Entregado'];
-    final current = (order['status'] ?? order['Estado_Pedido'] ?? order['estado'] ?? order['status_label'] ?? '').toString();
+    final List<String> steps = [
+      'Confirmado',
+      'Preparando',
+      'En Camino',
+      'Entregado',
+    ];
+    final current =
+        (order['status'] ??
+                order['Estado_Pedido'] ??
+                order['estado'] ??
+                order['status_label'] ??
+                '')
+            .toString();
     int currentIndex = steps.indexOf(current);
     if (currentIndex < 0) {
       // try mapping common alternatives
       final low = current.toLowerCase();
-      if (low.contains('pend')) currentIndex = 0;
-      else if (low.contains('prepar')) currentIndex = 1;
-      else if (low.contains('camino') || low.contains('entrega') || low.contains('en camino')) currentIndex = 2;
-      else if (low.contains('entreg')) currentIndex = 3;
-      else currentIndex = 0;
+      if (low.contains('pend'))
+        currentIndex = 0;
+      else if (low.contains('prepar'))
+        currentIndex = 1;
+      else if (low.contains('camino') ||
+          low.contains('entrega') ||
+          low.contains('en camino'))
+        currentIndex = 2;
+      else if (low.contains('entreg'))
+        currentIndex = 3;
+      else
+        currentIndex = 0;
     }
 
     return Row(
@@ -319,7 +425,13 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           child: GestureDetector(
             onTap: () async {
               try {
-                final orderId = (order['order_id'] ?? order['ID_Pedido'] ?? order['id'] ?? order['ID'] ?? '').toString();
+                final orderId =
+                    (order['order_id'] ??
+                            order['ID_Pedido'] ??
+                            order['id'] ??
+                            order['ID'] ??
+                            '')
+                        .toString();
                 await _updateOrderStatus(orderId, label);
               } catch (e) {
                 // ignore
@@ -334,18 +446,26 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                     color: isActive ? Colors.green : Colors.grey[300],
                     shape: BoxShape.circle,
                   ),
-                  child: isActive ? const Icon(Icons.check, color: Colors.white, size: 12) : null,
+                  child: isActive
+                      ? const Icon(Icons.check, color: Colors.white, size: 12)
+                      : null,
                 ),
                 const SizedBox(height: 6),
                 Text(
                   label,
-                  style: TextStyle(fontSize: 12, color: isActive ? Colors.black : Colors.grey[600]),
+                  style: TextStyle(
+                    fontSize: 12,
+                    color: isActive ? Colors.black : Colors.grey[600],
+                  ),
                   textAlign: TextAlign.center,
                 ),
                 if (idx < steps.length - 1)
                   Container(
                     height: 4,
-                    margin: const EdgeInsets.symmetric(vertical: 6, horizontal: 12),
+                    margin: const EdgeInsets.symmetric(
+                      vertical: 6,
+                      horizontal: 12,
+                    ),
                     color: idx < currentIndex ? Colors.green : Colors.grey[300],
                     width: double.infinity,
                   ),
@@ -359,7 +479,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
   Future<void> _updateOrderStatus(String orderId, String status) async {
     try {
-  final sanitizedOrderId = orderId.toString().replaceAll(RegExp(r'[^0-9]'), '');
+      final sanitizedOrderId = orderId.toString().replaceAll(
+        RegExp(r'[^0-9]'),
+        '',
+      );
       final resp = await http.post(
         Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
@@ -374,28 +497,39 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         if (decoded != null && decoded['success'] == true) {
           // actualizar orden localmente
           setState(() {
-            final idx = _recentOrders.indexWhere((r) => (r['order_id']?.toString() ?? r['ID_Pedido']?.toString() ?? '') == sanitizedOrderId);
+            final idx = _recentOrders.indexWhere(
+              (r) =>
+                  (r['order_id']?.toString() ??
+                      r['ID_Pedido']?.toString() ??
+                      '') ==
+                  sanitizedOrderId,
+            );
             if (idx >= 0) {
               _recentOrders[idx]['status'] = status;
             }
           });
           // Notificar a otras pantallas en la app
           try {
-            final notify = {
-              'order_id': sanitizedOrderId,
-              'status': status,
-            };
+            final notify = {'order_id': sanitizedOrderId, 'status': status};
             OrderService.notifyNewOrder(notify);
           } catch (_) {}
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Estado actualizado: $status')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Estado actualizado: $status')),
+          );
         } else {
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('No se pudo actualizar: ${resp.body}')));
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('No se pudo actualizar: ${resp.body}')),
+          );
         }
       } else {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('HTTP ${resp.statusCode}')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('HTTP ${resp.statusCode}')));
       }
     } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error de red: $e')));
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(SnackBar(content: Text('Error de red: $e')));
     }
   }
 
@@ -427,7 +561,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       'ID',
       'pedido_id',
     ]);
-    m['order_id'] = id ?? src.values.map((e) => e?.toString()).firstWhere((_) => true, orElse: () => null);
+    m['order_id'] =
+        id ??
+        src.values
+            .map((e) => e?.toString())
+            .firstWhere((_) => true, orElse: () => null);
 
     // customer / nombre
     var customer = pickFirst([
@@ -444,32 +582,43 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     // sanitize accidental file paths or screenclip strings
     if (customer != null) {
       final lower = customer.toLowerCase();
-      if (customer.contains('\\') || lower.contains('screencap') || lower.contains('screenclip') || RegExp(r'^[a-zA-Z]:\\').hasMatch(customer)) {
+      if (customer.contains('\\') ||
+          lower.contains('screencap') ||
+          lower.contains('screenclip') ||
+          RegExp(r'^[a-zA-Z]:\\').hasMatch(customer)) {
         customer = null;
       }
     }
     m['customer'] = customer ?? 'Cliente';
 
     // table / mesa
-    m['table'] = pickFirst(['table', 'mesa', 'numero_mesa', 'mesa_numero']) ?? '';
+    m['table'] =
+        pickFirst(['table', 'mesa', 'numero_mesa', 'mesa_numero']) ?? '';
 
     // ubicacion / direccion
-    m['ubicacion'] = pickFirst([
-      'ubicacion',
-      'direccion',
-      'direccion_entrega',
-      'direccion_envio',
-      'address'
-    ]) ?? '';
+    m['ubicacion'] =
+        pickFirst([
+          'ubicacion',
+          'direccion',
+          'direccion_entrega',
+          'direccion_envio',
+          'address',
+        ]) ??
+        '';
 
     // state/status
-    m['status'] = pickFirst(['status', 'estado', 'estado_pedido']) ?? src['status']?.toString() ?? 'Pendiente';
+    m['status'] =
+        pickFirst(['status', 'estado', 'estado_pedido']) ??
+        src['status']?.toString() ??
+        'Pendiente';
 
     // total
-    m['total'] = pickFirst(['total', 'monto', 'precio', 'Total']) ?? src['total'];
+    m['total'] =
+        pickFirst(['total', 'monto', 'precio', 'Total']) ?? src['total'];
 
     // payment method
-    m['payment_method'] = pickFirst(['payment_method', 'metodo_pago', 'pago', 'payment']) ?? '';
+    m['payment_method'] =
+        pickFirst(['payment_method', 'metodo_pago', 'pago', 'payment']) ?? '';
 
     // preserve other keys just in case
     for (final entry in src.entries) {
@@ -644,10 +793,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 // Descripción
                 Text(
                   platillo['Descripcion'] ?? 'Sin descripción',
-                  style: TextStyle(
-                    fontSize: 14,
-                    color: Colors.grey[700],
-                  ),
+                  style: TextStyle(fontSize: 14, color: Colors.grey[700]),
                 ),
                 const SizedBox(height: 12),
                 // Estado
@@ -703,14 +849,18 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     Color colorPrimario,
     Color colorAccento,
   ) {
-    final TextEditingController nombreController =
-        TextEditingController(text: platillo['Platillo']?.toString() ?? '');
-    final TextEditingController precioController =
-        TextEditingController(text: platillo['Precio']?.toString() ?? '');
-    final TextEditingController descripcionController =
-        TextEditingController(text: platillo['Descripcion']?.toString() ?? '');
-    final TextEditingController imagenController =
-        TextEditingController(text: platillo['Imagen']?.toString() ?? '');
+    final TextEditingController nombreController = TextEditingController(
+      text: platillo['Platillo']?.toString() ?? '',
+    );
+    final TextEditingController precioController = TextEditingController(
+      text: platillo['Precio']?.toString() ?? '',
+    );
+    final TextEditingController descripcionController = TextEditingController(
+      text: platillo['Descripcion']?.toString() ?? '',
+    );
+    final TextEditingController imagenController = TextEditingController(
+      text: platillo['Imagen']?.toString() ?? '',
+    );
 
     // Variables para imagen local
     Uint8List? imagenBytes;
@@ -735,8 +885,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             }))) &&
         categorias.isNotEmpty) {
       final firstId = categorias.first['ID_Categoria'];
-      categoriaActual =
-          firstId is int ? firstId : int.tryParse(firstId.toString());
+      categoriaActual = firstId is int
+          ? firstId
+          : int.tryParse(firstId.toString());
     }
 
     if (estadoActual != 1 && estadoActual != 2) {
@@ -841,8 +992,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                             Expanded(
                               child: ElevatedButton.icon(
                                 onPressed: () async {
-                                  final XFile? picked =
-                                      await _picker.pickImage(
+                                  final XFile? picked = await _picker.pickImage(
                                     source: ImageSource.gallery,
                                     imageQuality: 85,
                                   );
@@ -860,8 +1010,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                                 style: ElevatedButton.styleFrom(
                                   backgroundColor: colorPrimario,
                                   foregroundColor: Colors.white,
-                                  padding:
-                                      const EdgeInsets.symmetric(vertical: 14),
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
                                   shape: RoundedRectangleBorder(
                                     borderRadius: BorderRadius.circular(12),
                                   ),
@@ -879,8 +1030,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                             filled: true,
                             fillColor: Colors.grey.shade50,
                             hintText: 'URL de imagen (opcional)',
-                            prefixIcon:
-                                Icon(Icons.image, color: colorPrimario),
+                            prefixIcon: Icon(Icons.image, color: colorPrimario),
                             enabledBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(12),
                               borderSide: BorderSide(
@@ -982,11 +1132,16 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         const SizedBox(height: 16),
                         // Dropdown Categoría
                         DropdownButtonFormField<int>(
-                          value: categorias.any((cat) {
-                            final id = cat['ID_Categoria'];
-                            final catId = id is int ? id : int.tryParse(id.toString());
-                            return catId == categoriaActual;
-                          }) ? categoriaActual : null,
+                          value:
+                              categorias.any((cat) {
+                                final id = cat['ID_Categoria'];
+                                final catId = id is int
+                                    ? id
+                                    : int.tryParse(id.toString());
+                                return catId == categoriaActual;
+                              })
+                              ? categoriaActual
+                              : null,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: Colors.grey.shade50,
@@ -1090,23 +1245,20 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                                       platillo['ID_Menu']?.toString() ?? '0',
                                     );
 
-                              print(
-                                '🔄 Actualizando platillo ID: $idMenu',
-                              );
+                              print('🔄 Actualizando platillo ID: $idMenu');
 
                               Map<String, dynamic> datosActualizados = {
                                 'ID_Menu': idMenu,
                                 'Platillo': nombreController.text.trim(),
                                 'Precio': precioController.text.trim(),
-                                'Descripcion':
-                                    descripcionController.text.trim(),
+                                'Descripcion': descripcionController.text
+                                    .trim(),
                                 'ID_Categoria': categoriaActual,
                                 'ID_Estado': estadoActual,
                               };
 
                               // Solo incluir Imagen si cambió y no está vacía
-                              final nuevaImagen =
-                                  imagenController.text.trim();
+                              final nuevaImagen = imagenController.text.trim();
                               if (nuevaImagen.isNotEmpty &&
                                   nuevaImagen != platillo['Imagen']) {
                                 datosActualizados['Imagen'] = nuevaImagen;
@@ -1119,11 +1271,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                                 // Actualizar con imagen nueva
                                 success =
                                     await MenuService.updateMenuItemWithImage(
-                                  datosActualizados,
-                                  imageBytes: imagenBytes,
-                                  imageFilename:
-                                      imagenFilename ?? 'imagen.jpg',
-                                );
+                                      datosActualizados,
+                                      imageBytes: imagenBytes,
+                                      imageFilename:
+                                          imagenFilename ?? 'imagen.jpg',
+                                    );
                               } else {
                                 // Actualizar sin cambiar imagen
                                 success = await MenuService.updateMenuItem(
@@ -1210,10 +1362,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           ),
           title: Text(
             '¿Eliminar platillo?',
-            style: TextStyle(
-              fontWeight: FontWeight.bold,
-              color: colorPrimario,
-            ),
+            style: TextStyle(fontWeight: FontWeight.bold, color: colorPrimario),
           ),
           content: Text(
             '¿Estás seguro de que deseas eliminar "${platillo['Platillo']}"?',
@@ -1233,8 +1382,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
                   print('🗑️ Eliminando platillo ID: $idMenu');
 
-                  final success =
-                      await MenuService.deleteMenuItem(idMenu ?? 0);
+                  final success = await MenuService.deleteMenuItem(idMenu ?? 0);
 
                   if (success) {
                     print('✅ Platillo eliminado exitosamente');
@@ -1276,7 +1424,6 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-
   void _mostrarFormularioPlatilloEmpleado(BuildContext context) {
     // Usar el color primario de la app para los modales
     const Color _modalPrimary = Color.fromRGBO(0, 20, 34, 1);
@@ -1304,7 +1451,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             if ((selectedCategoriaId == null ||
                     !(categorias.any((cat) {
                       final id = cat['ID_Categoria'];
-                      final intId = id is int ? id : int.tryParse(id.toString());
+                      final intId = id is int
+                          ? id
+                          : int.tryParse(id.toString());
                       return intId == selectedCategoriaId;
                     }))) &&
                 categorias.isNotEmpty) {
@@ -1317,413 +1466,428 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               selectedEstadoId = 2;
             }
             return DraggableScrollableSheet(
-          initialChildSize: 0.78,
-          minChildSize: 0.4,
-          maxChildSize: 0.95,
-          expand: false,
-          builder: (context, scrollController) {
-            return Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(20),
-                  topRight: Radius.circular(20),
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.08),
-                    blurRadius: 12,
+              initialChildSize: 0.78,
+              minChildSize: 0.4,
+              maxChildSize: 0.95,
+              expand: false,
+              builder: (context, scrollController) {
+                return Container(
+                  decoration: BoxDecoration(
+                    color: Colors.white,
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(20),
+                      topRight: Radius.circular(20),
+                    ),
+                    boxShadow: [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.08),
+                        blurRadius: 12,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-              padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
-              child: SingleChildScrollView(
-                controller: scrollController,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                  children: [
-                    // handle
-                    Center(
-                      child: Container(
-                        width: 48,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[300],
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                      ),
-                    ),
-                    Text(
-                      'Agregar Nuevo Platillo',
-                      style: TextStyle(
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: _modalPrimary,
-                      ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 20),
-                    TextField(
-                      controller: nombreController,
-                      style: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        hintText: 'Nombre del platillo',
-                        hintStyle: TextStyle(
-                          color: Colors.black.withOpacity(0.6),
-                        ),
-                        prefixIcon: Icon(
-                          Icons.restaurant_menu,
-                          color: _modalPrimary,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: Colors.blueAccent,
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Botón para seleccionar imagen desde el dispositivo
-                    Row(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 18,
+                    vertical: 12,
+                  ),
+                  child: SingleChildScrollView(
+                    controller: scrollController,
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
                       children: [
-                        Expanded(
-                          child: ElevatedButton.icon(
-                            onPressed: () async {
-                              final XFile? picked = await _picker.pickImage(
-                                source: ImageSource.gallery,
-                                imageQuality: 85,
-                              );
-                              if (picked != null) {
-                                final b = await picked.readAsBytes();
-                                setModalState(() {
-                                  imagenBytes = b;
-                                  imagenFilename = picked.name;
-                                  // Limpiar campo URL si había
-                                  imagenController.text = '';
-                                });
-                              }
-                            },
-                            icon: const Icon(Icons.photo_library),
-                            label: const Text('Seleccionar imagen'),
-                            style: ElevatedButton.styleFrom(
-                              backgroundColor: _modalPrimary,
-                              foregroundColor: Colors.white,
-                              padding: const EdgeInsets.symmetric(vertical: 14),
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(12),
-                              ),
+                        // handle
+                        Center(
+                          child: Container(
+                            width: 48,
+                            height: 4,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[300],
+                              borderRadius: BorderRadius.circular(4),
                             ),
                           ),
                         ),
-                        const SizedBox(width: 8),
-                        // También permitir pegar URL manualmente si el usuario quiere
-                        IconButton(
-                          onPressed: () {
-                            // foco al campo URL en caso de querer pegar
-                            // No hacemos más aquí; el campo URL aún está presente más abajo
-                          },
-                          icon: const Icon(Icons.link),
-                          color: _modalPrimary,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 12),
-                    // Campo para la imagen (URL o ruta) - opcional
-                    TextField(
-                      controller: imagenController,
-                      style: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        hintText:
-                            'Imagen (URL, opcional si eliges archivo local)',
-                        prefixIcon: Icon(Icons.image, color: _modalPrimary),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
+                        Text(
+                          'Agregar Nuevo Platillo',
+                          style: TextStyle(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
                             color: _modalPrimary,
-                            width: 1,
                           ),
+                          textAlign: TextAlign.center,
                         ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                      onChanged: (v) {
-                        setModalState(() {});
-                      },
-                    ),
-                    const SizedBox(height: 12),
-                    // Preview de la imagen: preferir bytes seleccionados, si no usar URL
-                    if (imagenBytes != null)
-                      Container(
-                        height: 140,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: Image.memory(imagenBytes!, fit: BoxFit.cover),
-                        ),
-                      )
-                    else if (imagenController.text.trim().isNotEmpty)
-                      Container(
-                        height: 140,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[100],
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: ClipRRect(
-                          borderRadius: BorderRadius.circular(12),
-                          child: FlexibleImage(
-                            source: imagenController.text,
-                            name: nombreController.text,
-                            fit: BoxFit.cover,
-                          ),
-                        ),
-                      ),
-                    TextField(
-                      controller: precioController,
-                      keyboardType: const TextInputType.numberWithOptions(
-                        decimal: true,
-                      ),
-                      style: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        hintText: 'Precio (ej: 12.99)',
-                        hintStyle: TextStyle(
-                          color: Colors.black.withOpacity(0.6),
-                        ),
-                        prefixIcon: Icon(
-                          Icons.attach_money,
-                          color: Colors.green.shade600,
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    TextField(
-                      controller: descripcionController,
-                      maxLines: 3,
-                      style: TextStyle(color: Colors.black),
-                      decoration: InputDecoration(
-                        filled: true,
-                        fillColor: Colors.grey.shade50,
-                        hintText: 'Descripción del platillo',
-                        hintStyle: TextStyle(
-                          color: Colors.black.withOpacity(0.6),
-                        ),
-                        enabledBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 1,
-                          ),
-                        ),
-                        focusedBorder: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(12),
-                          borderSide: BorderSide(
-                            color: _modalPrimary,
-                            width: 2,
-                          ),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    // Selector de Categoría (estilo admin)
-                    if (categorias.isNotEmpty)
-                      Container(
-                        decoration: BoxDecoration(
-                          color: Colors.grey.shade50,
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(
-                            color: _modalPrimary,
-                            width: 1,
-                          ),
-                        ),
-                        padding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 4,
-                        ),
-                        child: DropdownButtonHideUnderline(
-                          child: DropdownButton<int>(
-                            value: selectedCategoriaId,
-                            isExpanded: true,
-                            hint: Text(
-                              'Seleccionar Categoría',
-                              style: TextStyle(
-                                color: Colors.black.withOpacity(0.6),
-                              ),
+                        const SizedBox(height: 20),
+                        TextField(
+                          controller: nombreController,
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'Nombre del platillo',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
                             ),
-                            icon: Icon(
-                              Icons.arrow_drop_down,
+                            prefixIcon: Icon(
+                              Icons.restaurant_menu,
                               color: _modalPrimary,
                             ),
-                            items: categorias.map((cat) {
-                              final id = cat['ID_Categoria'];
-                              final intId =
-                                  id is int ? id : int.tryParse(id.toString());
-                              return DropdownMenuItem<int>(
-                                value: intId,
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.category, color: _modalPrimary),
-                                    const SizedBox(width: 8),
-                                    Text(
-                                      cat['Descripcion']?.toString() ?? '',
-                                      style: TextStyle(color: Colors.black),
-                                    ),
-                                  ],
-                                ),
-                              );
-                            }).toList(),
-                            onChanged: (value) {
-                              setModalState(() {
-                                selectedCategoriaId = value;
-                                categoriaSeleccionada = value;
-                              });
-                            },
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: Colors.blueAccent,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 2,
+                              ),
+                            ),
                           ),
                         ),
-                      ),
-                    const SizedBox(height: 16),
-                    // Selector de Estado (estilo admin)
-                    Container(
-                      decoration: BoxDecoration(
-                        color: Colors.grey.shade50,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: _modalPrimary, width: 1),
-                      ),
-                      padding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 4,
-                      ),
-                      child: DropdownButtonHideUnderline(
-                        child: DropdownButton<int>(
-                          value: selectedEstadoId,
-                          isExpanded: true,
-                          icon: Icon(
-                            Icons.arrow_drop_down,
-                            color: _modalPrimary,
-                          ),
-                          items: const [
-                            DropdownMenuItem<int>(
-                              value: 2,
-                              child: Text('Disponible'),
+                        const SizedBox(height: 16),
+                        // Botón para seleccionar imagen desde el dispositivo
+                        Row(
+                          children: [
+                            Expanded(
+                              child: ElevatedButton.icon(
+                                onPressed: () async {
+                                  final XFile? picked = await _picker.pickImage(
+                                    source: ImageSource.gallery,
+                                    imageQuality: 85,
+                                  );
+                                  if (picked != null) {
+                                    final b = await picked.readAsBytes();
+                                    setModalState(() {
+                                      imagenBytes = b;
+                                      imagenFilename = picked.name;
+                                      // Limpiar campo URL si había
+                                      imagenController.text = '';
+                                    });
+                                  }
+                                },
+                                icon: const Icon(Icons.photo_library),
+                                label: const Text('Seleccionar imagen'),
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: _modalPrimary,
+                                  foregroundColor: Colors.white,
+                                  padding: const EdgeInsets.symmetric(
+                                    vertical: 14,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                              ),
                             ),
-                            DropdownMenuItem<int>(
-                              value: 1,
-                              child: Text('No Disponible'),
+                            const SizedBox(width: 8),
+                            // También permitir pegar URL manualmente si el usuario quiere
+                            IconButton(
+                              onPressed: () {
+                                // foco al campo URL en caso de querer pegar
+                                // No hacemos más aquí; el campo URL aún está presente más abajo
+                              },
+                              icon: const Icon(Icons.link),
+                              color: _modalPrimary,
                             ),
                           ],
-                          onChanged: (value) {
-                            setModalState(() {
-                              selectedEstadoId = value ?? 2;
-                              estadoSeleccionado = selectedEstadoId;
-                            });
+                        ),
+                        const SizedBox(height: 12),
+                        // Campo para la imagen (URL o ruta) - opcional
+                        TextField(
+                          controller: imagenController,
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText:
+                                'Imagen (URL, opcional si eliges archivo local)',
+                            prefixIcon: Icon(Icons.image, color: _modalPrimary),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                          onChanged: (v) {
+                            setModalState(() {});
                           },
                         ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    ElevatedButton(
-                      onPressed: () async {
-                        try {
-                          bool success = false;
-                          if (imagenBytes != null) {
-                            // enviar multipart con bytes
-                            success = await MenuService.addMenuItemWithImage(
-                              {
-                                'Platillo': nombreController.text,
-                                'Precio': precioController.text,
-                                'Descripcion': descripcionController.text,
-                                'ID_Categoria': selectedCategoriaId,
-                                'ID_Estado': selectedEstadoId,
+                        const SizedBox(height: 12),
+                        // Preview de la imagen: preferir bytes seleccionados, si no usar URL
+                        if (imagenBytes != null)
+                          Container(
+                            height: 140,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.memory(
+                                imagenBytes!,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          )
+                        else if (imagenController.text.trim().isNotEmpty)
+                          Container(
+                            height: 140,
+                            margin: const EdgeInsets.only(bottom: 12),
+                            decoration: BoxDecoration(
+                              color: Colors.grey[100],
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: FlexibleImage(
+                                source: imagenController.text,
+                                name: nombreController.text,
+                                fit: BoxFit.cover,
+                              ),
+                            ),
+                          ),
+                        TextField(
+                          controller: precioController,
+                          keyboardType: const TextInputType.numberWithOptions(
+                            decimal: true,
+                          ),
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'Precio (ej: 12.99)',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            prefixIcon: Icon(
+                              Icons.attach_money,
+                              color: Colors.green.shade600,
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        TextField(
+                          controller: descripcionController,
+                          maxLines: 3,
+                          style: TextStyle(color: Colors.black),
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: Colors.grey.shade50,
+                            hintText: 'Descripción del platillo',
+                            hintStyle: TextStyle(
+                              color: Colors.black.withOpacity(0.6),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 1,
+                              ),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(12),
+                              borderSide: BorderSide(
+                                color: _modalPrimary,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 16),
+                        // Selector de Categoría (estilo admin)
+                        if (categorias.isNotEmpty)
+                          Container(
+                            decoration: BoxDecoration(
+                              color: Colors.grey.shade50,
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: _modalPrimary,
+                                width: 1,
+                              ),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 4,
+                            ),
+                            child: DropdownButtonHideUnderline(
+                              child: DropdownButton<int>(
+                                value: selectedCategoriaId,
+                                isExpanded: true,
+                                hint: Text(
+                                  'Seleccionar Categoría',
+                                  style: TextStyle(
+                                    color: Colors.black.withOpacity(0.6),
+                                  ),
+                                ),
+                                icon: Icon(
+                                  Icons.arrow_drop_down,
+                                  color: _modalPrimary,
+                                ),
+                                items: categorias.map((cat) {
+                                  final id = cat['ID_Categoria'];
+                                  final intId = id is int
+                                      ? id
+                                      : int.tryParse(id.toString());
+                                  return DropdownMenuItem<int>(
+                                    value: intId,
+                                    child: Row(
+                                      children: [
+                                        Icon(
+                                          Icons.category,
+                                          color: _modalPrimary,
+                                        ),
+                                        const SizedBox(width: 8),
+                                        Text(
+                                          cat['Descripcion']?.toString() ?? '',
+                                          style: TextStyle(color: Colors.black),
+                                        ),
+                                      ],
+                                    ),
+                                  );
+                                }).toList(),
+                                onChanged: (value) {
+                                  setModalState(() {
+                                    selectedCategoriaId = value;
+                                    categoriaSeleccionada = value;
+                                  });
+                                },
+                              ),
+                            ),
+                          ),
+                        const SizedBox(height: 16),
+                        // Selector de Estado (estilo admin)
+                        Container(
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade50,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(color: _modalPrimary, width: 1),
+                          ),
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 4,
+                          ),
+                          child: DropdownButtonHideUnderline(
+                            child: DropdownButton<int>(
+                              value: selectedEstadoId,
+                              isExpanded: true,
+                              icon: Icon(
+                                Icons.arrow_drop_down,
+                                color: _modalPrimary,
+                              ),
+                              items: const [
+                                DropdownMenuItem<int>(
+                                  value: 2,
+                                  child: Text('Disponible'),
+                                ),
+                                DropdownMenuItem<int>(
+                                  value: 1,
+                                  child: Text('No Disponible'),
+                                ),
+                              ],
+                              onChanged: (value) {
+                                setModalState(() {
+                                  selectedEstadoId = value ?? 2;
+                                  estadoSeleccionado = selectedEstadoId;
+                                });
                               },
-                              imageBytes: imagenBytes,
-                              imageFilename: imagenFilename ?? 'imagen.jpg',
-                            );
-                          } else {
-                            // enviar JSON, si el usuario pegó una URL se incluirá
-                            success = await MenuService.addMenuItem({
-                              'Platillo': nombreController.text,
-                              'Precio': precioController.text,
-                              'Descripcion': descripcionController.text,
-                              'Imagen': imagenController.text,
-                              'ID_Categoria': selectedCategoriaId,
-                              'ID_Estado': selectedEstadoId,
-                            });
-                          }
-                          if (success) {
-                            Navigator.of(context).pop();
-                            _fetchMenuItems();
-                          } else {
-                            throw Exception('Error al guardar el platillo');
-                          }
-                        } catch (e) {
-                          print('Error: $e');
-                        }
-                      },
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: _modalPrimary,
-                        foregroundColor: Colors.white,
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(12),
+                            ),
+                          ),
                         ),
-                        padding: const EdgeInsets.symmetric(
-                          vertical: 16,
-                          horizontal: 20,
+                        const SizedBox(height: 16),
+                        ElevatedButton(
+                          onPressed: () async {
+                            try {
+                              bool success = false;
+                              if (imagenBytes != null) {
+                                // enviar multipart con bytes
+                                success =
+                                    await MenuService.addMenuItemWithImage(
+                                      {
+                                        'Platillo': nombreController.text,
+                                        'Precio': precioController.text,
+                                        'Descripcion':
+                                            descripcionController.text,
+                                        'ID_Categoria': selectedCategoriaId,
+                                        'ID_Estado': selectedEstadoId,
+                                      },
+                                      imageBytes: imagenBytes,
+                                      imageFilename:
+                                          imagenFilename ?? 'imagen.jpg',
+                                    );
+                              } else {
+                                // enviar JSON, si el usuario pegó una URL se incluirá
+                                success = await MenuService.addMenuItem({
+                                  'Platillo': nombreController.text,
+                                  'Precio': precioController.text,
+                                  'Descripcion': descripcionController.text,
+                                  'Imagen': imagenController.text,
+                                  'ID_Categoria': selectedCategoriaId,
+                                  'ID_Estado': selectedEstadoId,
+                                });
+                              }
+                              if (success) {
+                                Navigator.of(context).pop();
+                                _fetchMenuItems();
+                              } else {
+                                throw Exception('Error al guardar el platillo');
+                              }
+                            } catch (e) {
+                              print('Error: $e');
+                            }
+                          },
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: _modalPrimary,
+                            foregroundColor: Colors.white,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            padding: const EdgeInsets.symmetric(
+                              vertical: 16,
+                              horizontal: 20,
+                            ),
+                            elevation: 4,
+                          ),
+                          child: const Text(
+                            'Guardar',
+                            style: TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                         ),
-                        elevation: 4,
-                      ),
-                      child: const Text(
-                        'Guardar',
-                        style: TextStyle(
-                          fontSize: 16,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
+                        const SizedBox(height: 12),
+                      ],
                     ),
-                    const SizedBox(height: 12),
-                  ],
-                ),
-              ),
-            );
-          },
+                  ),
+                );
+              },
             );
           },
         );
@@ -1822,15 +1986,15 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           });
         },
         items: [
-          const BottomNavigationBarItem(icon: Icon(Icons.dashboard), label: 'Inicio'),
+          const BottomNavigationBarItem(
+            icon: Icon(Icons.dashboard),
+            label: 'Inicio',
+          ),
           const BottomNavigationBarItem(
             icon: Icon(Icons.restaurant_menu),
             label: 'Menú',
           ),
-          BottomNavigationBarItem(
-            icon: _buildOrderIcon(),
-            label: 'Pedidos',
-          ),
+          BottomNavigationBarItem(icon: _buildOrderIcon(), label: 'Pedidos'),
           const BottomNavigationBarItem(
             icon: Icon(Icons.delivery_dining),
             label: 'Repartidores',
@@ -1865,7 +2029,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             child: Center(
               child: Text(
                 _pendingOrderCount > 99 ? '99+' : _pendingOrderCount.toString(),
-                style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                ),
               ),
             ),
           ),
@@ -2109,7 +2277,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           final double imageH = (totalH.isFinite && totalH > 0)
               ? totalH * 0.65
               : 140;
-      // Ya no usamos altura fija para info; Expanded evita desbordes.
+          // Ya no usamos altura fija para info; Expanded evita desbordes.
 
           return AnimatedContainer(
             duration: const Duration(milliseconds: 200),
@@ -2277,14 +2445,20 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             const SizedBox(height: 8),
             Column(
               children: _recentOrders.map((o) {
-                final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
-                final orderNumber = normalized['order_id']?.toString() ?? 'Pedido';
-                final customer = normalized['customer']?.toString() ?? 'Cliente';
+                final normalized = _normalizeOrder(
+                  Map<String, dynamic>.from(o),
+                );
+                final orderNumber =
+                    normalized['order_id']?.toString() ?? 'Pedido';
+                final customer =
+                    normalized['customer']?.toString() ?? 'Cliente';
                 final table = normalized['table']?.toString() ?? '';
                 final ubicacion = normalized['ubicacion']?.toString() ?? '';
                 final isDelivery = ubicacion.isNotEmpty;
                 final status = normalized['status']?.toString() ?? 'Pendiente';
-                final total = normalized['total'] != null ? '\$${normalized['total']}' : '\$0.00';
+                final total = normalized['total'] != null
+                    ? '\$${normalized['total']}'
+                    : '\$0.00';
                 final payment = normalized['payment_method']?.toString() ?? '';
                 return _buildOrderCard(
                   orderNumber,
@@ -2358,19 +2532,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           ),
           const SizedBox(height: 12),
 
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: _repartidores.isEmpty
-                  ? [
-                      _buildRepartidorCard('Juan Pérez', 'Disponible', colorAzul),
-                      _buildRepartidorCard('María García', 'En ruta', colorAzul),
-                      _buildRepartidorCard('Carlos López', 'Disponible', colorAzul),
-                      _buildRepartidorCard('Ana Martínez', 'En ruta', colorAzul),
-                    ]
-                  : _repartidores.map<Widget>((r) => _buildRepartidorCardFromData(r, colorAzul)).toList(),
-            ),
+          // Lista dinámica de repartidores cargada desde la BD
+          RepartidoresList(
+            showPhone: true,
+            onTapRepartidor: (r) {
+              _showRepartidorDetails(r);
+            },
           ),
 
           const SizedBox(height: 24),
@@ -2580,18 +2747,20 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           const SizedBox(height: 8),
           Text('Cliente: $customer'),
           if (table.isNotEmpty) ...[
-            if (isDelivery)
-              Text('Ubicación: $table')
-            else
-              Text('Mesa: $table'),
+            if (isDelivery) Text('Ubicación: $table') else Text('Mesa: $table'),
           ],
           if (paymentMethod != null && paymentMethod.isNotEmpty) ...[
             const SizedBox(height: 6),
-            Text('Pago: $paymentMethod', style: const TextStyle(fontWeight: FontWeight.w500)),
+            Text(
+              'Pago: $paymentMethod',
+              style: const TextStyle(fontWeight: FontWeight.w500),
+            ),
           ],
           const SizedBox(height: 12),
           // Barra de estado interactiva para empleados
-          _buildInteractiveStatusBar(rawOrder ?? {'status': status, 'order_id': orderNumber}),
+          _buildInteractiveStatusBar(
+            rawOrder ?? {'status': status, 'order_id': orderNumber},
+          ),
           const SizedBox(height: 8),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -2613,7 +2782,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                         : <dynamic>[];
                     final double parsedTotal = (() {
                       try {
-                        final t = rawOrder != null ? (rawOrder['total'] ?? rawOrder['Total']) : null;
+                        final t = rawOrder != null
+                            ? (rawOrder['total'] ?? rawOrder['Total'])
+                            : null;
                         if (t == null) return 0.0;
                         return double.tryParse(t.toString()) ?? 0.0;
                       } catch (_) {
@@ -2621,27 +2792,38 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                       }
                     })();
                     final ubic = rawOrder != null
-                        ? (rawOrder['ubicacion'] ?? rawOrder['Ubicacion'] ?? rawOrder['direccion'] ?? '')
-                            .toString()
+                        ? (rawOrder['ubicacion'] ??
+                                  rawOrder['Ubicacion'] ??
+                                  rawOrder['direccion'] ??
+                                  '')
+                              .toString()
                         : '';
                     final telefono = rawOrder != null
-                        ? (rawOrder['telefono'] ?? rawOrder['Telefono'] ?? rawOrder['phone'] ?? '')
-                            .toString()
+                        ? (rawOrder['telefono'] ??
+                                  rawOrder['Telefono'] ??
+                                  rawOrder['phone'] ??
+                                  '')
+                              .toString()
                         : '';
                     final mesa = rawOrder != null
-                        ? (rawOrder['table'] ?? rawOrder['mesa'] ?? rawOrder['Mesa'] ?? '')
-                            .toString()
+                        ? (rawOrder['table'] ??
+                                  rawOrder['mesa'] ??
+                                  rawOrder['Mesa'] ??
+                                  '')
+                              .toString()
                         : '';
-                    Navigator.of(context).push(MaterialPageRoute(
-                      builder: (_) => OrderConfirmationScreen(
-                        orderId: orderNumber,
-                        items: items,
-                        total: parsedTotal,
-                        ubicacion: ubic,
-                        telefono: telefono,
-                        mesa: mesa,
+                    Navigator.of(context).push(
+                      MaterialPageRoute(
+                        builder: (_) => OrderConfirmationScreen(
+                          orderId: orderNumber,
+                          items: items,
+                          total: parsedTotal,
+                          ubicacion: ubic,
+                          telefono: telefono,
+                          mesa: mesa,
+                        ),
                       ),
-                    ));
+                    );
                   } catch (e) {
                     // ignore: avoid_print
                     print('empleado: error opening details $e');
@@ -2722,10 +2904,21 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   }
 
   Widget _buildRepartidorCardFromData(Map<String, dynamic> r, Color colorAzul) {
-    final name = (r['Nombre'] ?? r['nombre'] ?? r['name'] ?? r['ID_Repartidor'] ?? r['ID'] ?? 'Repartidor').toString();
+    final name =
+        (r['Nombre'] ??
+                r['nombre'] ??
+                r['name'] ??
+                r['ID_Repartidor'] ??
+                r['ID'] ??
+                'Repartidor')
+            .toString();
     final estadoRaw = r['Estado_Repartidor'] ?? r['estado'] ?? r['status'] ?? 0;
-    final bool disponible = (estadoRaw.toString() == '1' || estadoRaw.toString().toLowerCase() == '1' || estadoRaw.toString().toLowerCase() == 'disponible');
-    final assigned = r['assigned_count'] ?? r['assigned'] ?? r['assignedCount'] ?? 0;
+    final bool disponible =
+        (estadoRaw.toString() == '1' ||
+        estadoRaw.toString().toLowerCase() == '1' ||
+        estadoRaw.toString().toLowerCase() == 'disponible');
+    final assigned =
+        r['assigned_count'] ?? r['assigned'] ?? r['assignedCount'] ?? 0;
     final statusLabel = disponible ? 'Disponible' : 'Ocupado';
 
     return InkWell(
@@ -2768,9 +2961,14 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
-                    color: disponible ? Colors.green.withOpacity(0.1) : Colors.orange.withOpacity(0.1),
+                    color: disponible
+                        ? Colors.green.withOpacity(0.1)
+                        : Colors.orange.withOpacity(0.1),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
@@ -2784,14 +2982,21 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 ),
                 const SizedBox(width: 6),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 8,
+                    vertical: 2,
+                  ),
                   decoration: BoxDecoration(
                     color: Colors.grey.withOpacity(0.08),
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Text(
                     '${assigned.toString()} pedidos',
-                    style: const TextStyle(fontSize: 10, color: Colors.black87, fontWeight: FontWeight.w500),
+                    style: const TextStyle(
+                      fontSize: 10,
+                      color: Colors.black87,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],

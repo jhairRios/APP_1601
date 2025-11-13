@@ -72,6 +72,46 @@ try {
         exit;
     }
 
+    // ----------------------- LISTAR REPARTIDORES (Top-level handler) -----------------------
+    if ($action === 'get_repartidores') {
+        try {
+            // Determine repartidor column in pedidos if present to compute assigned counts
+            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
+            $colsStmt->execute([$dbname]);
+            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
+            $repartidorCol = null; $estadoCol = null; $idCol = null;
+            foreach ($cols as $c) {
+                $low = strtolower($c);
+                if (in_array($low, ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) { $repartidorCol = $c; }
+                if (in_array($low, ['estado','estado_pedido','status'])) { if ($estadoCol===null) $estadoCol = $c; }
+                if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { if ($idCol===null) $idCol = $c; }
+            }
+            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
+
+            // Build query: return repartidor rows plus assigned_count (active orders)
+            // Try to join usuarios to get display name when available
+            $sql = "SELECT r.*, u.Nombre AS Nombre";
+            if ($repartidorCol !== null) {
+                $sql .= ", COUNT(p.{$repartidorCol}) AS assigned_count";
+            } else {
+                $sql .= ", 0 AS assigned_count";
+            }
+            $sql .= " FROM repartidor r LEFT JOIN usuarios u ON u.Id_Usuario = r.ID_Usuario";
+            if ($repartidorCol !== null) {
+                $estadoCond = ($estadoCol !== null) ? "AND (p.{$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado'))" : "";
+                $sql .= " LEFT JOIN pedidos p ON p.{$repartidorCol} = r.ID_Repartidor {$estadoCond}";
+                $sql .= " GROUP BY r.ID_Repartidor ORDER BY assigned_count ASC";
+            }
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute();
+            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            echo json_encode(['success' => true, 'repartidores' => $rows]);
+        } catch (PDOException $e) {
+            echo json_encode(['success' => false, 'message' => 'Error obteniendo repartidores: ' . $e->getMessage()]);
+        }
+        exit;
+    }
+
     // ----------------------- USUARIOS -----------------------
     if ($action === 'create_user') {
         $nombre = $input_data['nombre'] ?? '';
