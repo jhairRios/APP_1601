@@ -66,19 +66,54 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
             // ignore: avoid_print
             print('empleado: received order (stream) -> ${order.toString()}');
             if (!mounted) return;
+
+            // Normalize incoming order (the stream sends a Map<String,dynamic>)
+            Map<String, dynamic> normOrder = {};
+            try {
+              normOrder = _normalizeOrder(Map<String, dynamic>.from(order as Map));
+            } catch (_) {
+              normOrder = {};
+            }
+
+            final isDel = _isDelivered(normOrder);
+
             setState(() {
-              // Solo incrementar contador y notificar; no modificar `_recentOrders`
-              _pendingOrderCount = (_pendingOrderCount) + 1;
+              if (!isDel) {
+                // Pending or in-progress: ensure it's present in recent orders (pending view)
+                final oid = (normOrder['order_id'] ?? normOrder['ID_Pedido'] ?? normOrder['id'] ?? normOrder['ID'] ?? '').toString();
+                _recentOrders.removeWhere((o) {
+                  final existingId = (o['order_id'] ?? o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? '').toString();
+                  return existingId == oid;
+                });
+                _recentOrders.insert(0, normOrder);
+                // increment visual counter for new pending orders
+                _pendingOrderCount = (_pendingOrderCount) + 1;
+              } else {
+                // Delivered: if the employee is viewing history, insert/update the history list
+                final oid = (normOrder['order_id'] ?? normOrder['ID_Pedido'] ?? normOrder['id'] ?? normOrder['ID'] ?? '').toString();
+                // always remove any existing instance
+                _recentOrders.removeWhere((o) {
+                  final existingId = (o['order_id'] ?? o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? '').toString();
+                  return existingId == oid;
+                });
+                if (_showHistory) {
+                  _recentOrders.insert(0, normOrder);
+                }
+              }
             });
 
-            // Mostrar SnackBar de notificación en un post-frame callback
+            // Save cache and refresh repartidores counters
+            try { _saveRecentOrdersCache(); } catch (_) {}
+            _loadRepartidores();
+
+            // Show a notification with quick action to view
             if (mounted) {
               WidgetsBinding.instance.addPostFrameCallback((_) {
                 try {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
                       content: Text(
-                        'Nuevo pedido recibido (${_pendingOrderCount.toString()})',
+                        isDel ? 'Pedido entregado: ' + ((normOrder['order_id'] ?? '') .toString()) : 'Nuevo pedido recibido',
                       ),
                       duration: const Duration(seconds: 3),
                       action: SnackBarAction(
@@ -87,7 +122,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                           if (!mounted) return;
                           setState(() {
                             _selectedIndex = 2; // ir a Pedidos
-                            _pendingOrderCount = 0; // marcar como leído al verlo
+                            _pendingOrderCount = 0; // marcar como leído
                           });
                           // Forzar recarga desde servidor al abrir Pedidos
                           _pollPendingOrders();
