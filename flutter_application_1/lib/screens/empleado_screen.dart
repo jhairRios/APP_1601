@@ -44,6 +44,16 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   int _pendingOrderCount = 0; // contador de pedidos nuevos no leídos
   Timer? _pollTimer;
   List<Map<String, dynamic>> _repartidores = [];
+  // Configurable mapping for numeric status codes coming from the DB.
+  // Edit these values if your DB uses different integers for statuses.
+  final Map<int, String> _statusCodeMap = const {
+    0: 'Pendiente',
+    1: 'En Preparación',
+    2: 'Listo',
+    3: 'Entregado',
+  };
+  // Which numeric codes should be considered 'delivered' and therefore show in historial
+  final List<int> _deliveredStatusCodes = const [3];
 
   @override
   void initState() {
@@ -609,6 +619,23 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         pickFirst(['status', 'estado', 'estado_pedido']) ??
         src['status']?.toString() ??
         'Pendiente';
+
+    // If the status looks numeric (DB numeric codes), map it to a textual label
+    try {
+      final rawStatus = m['status']?.toString() ?? '';
+      final maybe = int.tryParse(rawStatus);
+      if (maybe != null) {
+        // record numeric code for downstream logic
+        m['_status_code'] = maybe;
+        // map to friendly label if available
+        if (_statusCodeMap.containsKey(maybe)) {
+          m['status'] = _statusCodeMap[maybe] ?? m['status'];
+        } else {
+          // fallback to keep numeric as-is
+          m['status'] = rawStatus;
+        }
+      }
+    } catch (_) {}
 
     // total
     m['total'] =
@@ -2793,12 +2820,20 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     final raw = (normalized['status'] ?? normalized['Estado_Pedido'] ?? normalized['estado'] ?? '') .toString();
     final low = raw.toLowerCase().trim();
     if (low.isEmpty) return false;
-    // numeric '3' often represents delivered
+    // If we stored a numeric code during normalization, prefer that
+    try {
+      final code = normalized['_status_code'];
+      if (code is int) {
+        if (_deliveredStatusCodes.contains(code)) return true;
+      }
+    } catch (_) {}
+
+    // Otherwise, if status is numeric text, check delivered list
     final maybeNum = int.tryParse(low);
-    if (maybeNum != null && maybeNum == 3) return true;
-    if (low.contains('entreg') || low.contains('finaliz') || low.contains('cancel')) {
-      // 'entreg' covers 'entregado', 'entrega'
-      return low.contains('entreg');
+    if (maybeNum != null && _deliveredStatusCodes.contains(maybeNum)) return true;
+
+    if (low.contains('entreg') || low.contains('finaliz')) {
+      return true;
     }
     return low == 'entregado' || low == 'finalizado';
   }
@@ -2847,20 +2882,66 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                decoration: BoxDecoration(
-                  color: _getStatusColor(status).withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: Text(
-                  status,
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: _getStatusColor(status),
-                    fontWeight: FontWeight.w500,
+              // Status + Assigned badge (if any)
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: _getStatusColor(status).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      status,
+                      style: TextStyle(
+                        fontSize: 12,
+                        color: _getStatusColor(status),
+                        fontWeight: FontWeight.w500,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  // detect assigned repartidor from rawOrder (different keys possible)
+                  Builder(builder: (_) {
+                    try {
+                      if (rawOrder == null) return const SizedBox.shrink();
+                      String? rep;
+                      for (final k in rawOrder.keys) {
+                        final lk = k.toString().toLowerCase();
+                        if (lk.contains('repart') || lk.contains('deliver') || lk.contains('driver')) {
+                          final v = rawOrder[k];
+                          if (v != null && v.toString().trim().isNotEmpty && v.toString() != '0') {
+                            rep = v.toString();
+                            break;
+                          }
+                        }
+                      }
+                      if (rep == null) return const SizedBox.shrink();
+                      // show simple badge with optional short name/id
+                      final short = rep.length > 18 ? rep.substring(0, 18) + '…' : rep;
+                      return Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.orange.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: Colors.orange.withOpacity(0.2)),
+                        ),
+                        child: Row(
+                          children: [
+                            const Icon(Icons.person, size: 12, color: Colors.orange),
+                            const SizedBox(width: 6),
+                            Text(
+                              'Asignado: $short',
+                              style: const TextStyle(fontSize: 12, color: Colors.orange),
+                            ),
+                          ],
+                        ),
+                      );
+                    } catch (_) {
+                      return const SizedBox.shrink();
+                    }
+                  }),
+                ],
               ),
             ],
           ),
