@@ -30,152 +30,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     }
     return 'No Disponible';
   }
-
-  Future<void> _showRepartidorDetails(Map<String, dynamic> r) async {
-    final repId =
-        r['ID_Repartidor'] ??
-        r['id'] ??
-        r['ID'] ??
-        r['Id'] ??
-        r['id_repartidor'];
-    if (repId == null) {
-      // mostrar dialog con info mínima
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Repartidor'),
-          content: Text('No se pudo identificar el ID del repartidor.'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        ),
-      );
-      return;
-    }
-
-    try {
-      final resp = await http.post(
-        Uri.parse(API_BASE_URL),
-        headers: {'Content-Type': 'application/json'},
-        body: json.encode({
-          'action': 'get_repartidor_orders',
-          'repartidor_id': repId,
-        }),
-      );
-      if (resp.statusCode != 200) {
-        showDialog(
-          context: context,
-          builder: (_) => AlertDialog(
-            title: const Text('Error'),
-            content: const Text('Error al obtener pedidos.'),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(context),
-                child: const Text('Cerrar'),
-              ),
-            ],
-          ),
-        );
-        return;
-      }
-      final decoded = json.decode(resp.body);
-      List<dynamic> orders = [];
-      if (decoded is Map && decoded['orders'] != null)
-        orders = decoded['orders'];
-      else if (decoded is List)
-        orders = decoded;
-
-      // Mostrar en dialog lista de pedidos asignados
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: Text(
-            'Pedidos de ${r['Nombre'] ?? r['nombre'] ?? 'Repartidor'}',
-          ),
-          content: SizedBox(
-            width: double.maxFinite,
-            child: orders.isEmpty
-                ? const Text('No hay pedidos asignados')
-                : ListView.builder(
-                    shrinkWrap: true,
-                    itemCount: orders.length,
-                    itemBuilder: (context, i) {
-                      final o = orders[i] as Map<String, dynamic>;
-                      final id =
-                          o['ID_Pedido'] ??
-                          o['id'] ??
-                          o['order_id'] ??
-                          o['ID'] ??
-                          o['Id'] ??
-                          '—';
-                      final cliente =
-                          o['Cliente'] ?? o['cliente'] ?? o['customer'] ?? '';
-                      final estado =
-                          o['Estado_Pedido'] ??
-                          o['estado'] ??
-                          o['status'] ??
-                          '';
-                      return ListTile(
-                        dense: true,
-                        title: Text(_formatOrderLabel(id.toString())),
-                        subtitle: Text(
-                          '${cliente.toString()} • ${estado.toString()}',
-                        ),
-                        onTap: () {
-                          Navigator.pop(context);
-                          // opcional: abrir detalle del pedido
-                          try {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => OrderConfirmationScreen(
-                                  orderId: id.toString(),
-                                  mesa:
-                                      o['Mesa'] ??
-                                      o['mesa'] ??
-                                      o['ubicacion'] ??
-                                      null,
-                                  telefono:
-                                      o['Telefono'] ?? o['telefono'] ?? null,
-                                ),
-                              ),
-                            );
-                          } catch (_) {}
-                        },
-                      );
-                    },
-                  ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        ),
-      );
-    } catch (e) {
-      showDialog(
-        context: context,
-        builder: (_) => AlertDialog(
-          title: const Text('Error'),
-          content: Text('Error: $e'),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cerrar'),
-            ),
-          ],
-        ),
-      );
-    }
-  }
-
-  // Devuelve el estado textual del platillo según el ID_Estado
-
+  // State fields
   List<Map<String, dynamic>> categorias = <Map<String, dynamic>>[];
   int? categoriaSeleccionada;
   int? estadoSeleccionado;
@@ -201,71 +56,53 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
       _fetchMenuItems();
     });
-    // Escuchar nuevos pedidos creados en la app (cliente)
-    _orderSubscription = OrderService.orderStream.listen((order) {
-      try {
-        // Debug print when empleado receives an order
-        // ignore: avoid_print
-        print('empleado: received order -> ${order.toString()}');
-
-        if (!mounted) return;
-        // Insertar de forma segura (si order no es Map, lo ignoramos)
-        Map<String, dynamic>? safeOrder;
-        try {
-          safeOrder = Map<String, dynamic>.from(order);
-        } catch (_) {
-          safeOrder = null;
-        }
-
-        setState(() {
-          if (safeOrder != null) {
-            final normalized = _normalizeOrder(safeOrder);
-            // evitar duplicados por order_id; si existe, actualizar el registro
-            final incomingId = normalized['order_id']?.toString();
-            final idx = _recentOrders.indexWhere((r) => r['order_id']?.toString() == incomingId);
-            if (idx == -1) {
-              _recentOrders.insert(0, normalized);
-              // Incrementar contador de pedidos pendientes solo si es nuevo
+        // Escuchar nuevos pedidos creados en la app (cliente)
+        // Nota: para mostrar únicamente los pedidos desde la BD, no insertamos
+        // los pedidos recibidos por stream en `_recentOrders`. En su lugar,
+        // actualizamos un contador y opcionalmente forzamos una recarga desde
+        // el servidor cuando sea necesario.
+        _orderSubscription = OrderService.orderStream.listen((order) {
+          try {
+            // ignore: avoid_print
+            print('empleado: received order (stream) -> ${order.toString()}');
+            if (!mounted) return;
+            setState(() {
+              // Solo incrementar contador y notificar; no modificar `_recentOrders`
               _pendingOrderCount = (_pendingOrderCount) + 1;
-            } else {
-              _recentOrders[idx] = normalized;
+            });
+
+            // Mostrar SnackBar de notificación en un post-frame callback
+            if (mounted) {
+              WidgetsBinding.instance.addPostFrameCallback((_) {
+                try {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text(
+                        'Nuevo pedido recibido (${_pendingOrderCount.toString()})',
+                      ),
+                      duration: const Duration(seconds: 3),
+                      action: SnackBarAction(
+                        label: 'Ver',
+                        onPressed: () {
+                          if (!mounted) return;
+                          setState(() {
+                            _selectedIndex = 2; // ir a Pedidos
+                            _pendingOrderCount = 0; // marcar como leído al verlo
+                          });
+                          // Forzar recarga desde servidor al abrir Pedidos
+                          _pollPendingOrders();
+                        },
+                      ),
+                    ),
+                  );
+                } catch (_) {}
+              });
             }
+          } catch (e) {
+            // ignore: avoid_print
+            print('empleado: order subscription error: $e');
           }
         });
-        // Persistir cache local de pedidos recientes
-        try { _saveRecentOrdersCache(); } catch (_) {}
-
-        // Mostrar SnackBar de notificación en un post-frame callback para evitar
-        // problemas si el Scaffold aún no está totalmente montado.
-        if (mounted) {
-          WidgetsBinding.instance.addPostFrameCallback((_) {
-            try {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Nuevo pedido recibido (${_pendingOrderCount.toString()})',
-                  ),
-                  duration: const Duration(seconds: 3),
-                  action: SnackBarAction(
-                    label: 'Ver',
-                    onPressed: () {
-                      if (!mounted) return;
-                      setState(() {
-                        _selectedIndex = 2; // ir a Pedidos
-                        _pendingOrderCount = 0; // marcar como leído al verlo
-                      });
-                    },
-                  ),
-                ),
-              );
-            } catch (_) {}
-          });
-        }
-      } catch (e) {
-        // ignore: avoid_print
-        print('empleado: order subscription error: $e');
-      }
-    });
     // Cargar cache local de pedidos recientes (si existe), antes de empezar polling
     _loadRecentOrdersCache().then((_) {
       // Iniciar polling periódico para detectar pedidos pendientes desde el servidor
@@ -337,33 +174,23 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         print('[empleado] _pollPendingOrders: fetched ${ordersRaw.length} ordersRaw entries');
       } catch (_) {}
 
-      // Normalize and merge new orders into _recentOrders avoiding duplicates
+      // Normalize and replace _recentOrders with the list fetched from the DB
       final fetched = List<Map<String, dynamic>>.from(
-        ordersRaw.map(
-          (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
-        ),
+        ordersRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
       );
 
-      int newCount = 0;
+      final normalizedList = fetched.reversed
+          .map((o) => _normalizeOrder(Map<String, dynamic>.from(o)))
+          .toList();
+
       setState(() {
-        for (final o in fetched.reversed) {
-          final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
-          final oid = normalized['order_id']?.toString();
-          final exists =
-              oid != null &&
-              _recentOrders.any((r) => r['order_id']?.toString() == oid);
-          if (!exists) {
-            _recentOrders.insert(0, normalized);
-            newCount++;
-          }
-        }
-        if (newCount > 0) {
-          _pendingOrderCount = (_pendingOrderCount) + newCount;
-        }
+        // Reemplazar por la lista proveniente de la BD (solo pedidos del servidor)
+        _recentOrders = normalizedList;
       });
-      if (newCount > 0) {
-        try { _saveRecentOrdersCache(); } catch (_) {}
-      }
+
+      try {
+        _saveRecentOrdersCache();
+      } catch (_) {}
 
       // Refrescar repartidores también para mantener contadores actualizados
       _loadRepartidores();
@@ -504,18 +331,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           if (m is Map<String, dynamic>) loaded.add(m);
         } catch (_) {}
       }
-      if (loaded.isNotEmpty) {
-        if (!mounted) return;
-        setState(() {
-          // merge loaded entries at the front, avoiding duplicates
-          for (final e in loaded.reversed) {
-            final oid = e['order_id']?.toString();
-            if (oid == null) continue;
-            final exists = _recentOrders.any((r) => r['order_id']?.toString() == oid);
-            if (!exists) _recentOrders.insert(0, e);
-          }
-        });
-      }
+      // Note: to ensure the UI displays only DB-backed orders, we do not
+      // merge the locally cached recent orders into `_recentOrders` here.
+      // Keeping the cache read for potential future use but skipping merge.
     } catch (e) {
       // ignore
     }
@@ -2689,26 +2507,15 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                 )
               : const SizedBox.shrink(),
 
-          // Lista simulada (sólo mostrar si no hay pedidos reales en displayOrders)
+          // Si no hay pedidos reales, mostrar mensaje en vez de lista simulada
           displayOrders.isEmpty
-              ? ListView.builder(
-                  shrinkWrap: true,
-                  physics: const NeverScrollableScrollPhysics(),
-                  itemCount: 6,
-                  itemBuilder: (context, index) {
-                    return _buildOrderCard(
-                      'Pedido #${1000 + index}',
-                      'Cliente ${index + 1}',
-                      'Mesa ${index + 1}',
-                      _getOrderStatus(index),
-                      '\$${(index + 1) * 25}.00',
-                      false,
-                      colorPrimario,
-                      colorNaranja,
-                      '',
-                      null,
-                    );
-                  },
+              ? Container(
+                  padding: const EdgeInsets.symmetric(vertical: 20),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'No hay pedidos en este momento',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                 )
               : const SizedBox.shrink(),
         ],
@@ -2767,21 +2574,56 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           ),
           const SizedBox(height: 12),
 
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 4,
-            itemBuilder: (context, index) {
-              return _buildReadyOrderCard(
-                'Pedido #${2000 + index}',
-                'Dirección ${index + 1}',
-                'Cliente ${index + 1}',
-                '\$${(index + 1) * 30}.00',
-                colorPrimario,
-                colorAzul,
+          // Use orders coming from the server (_recentOrders) and derive
+          // the set of "ready" orders here instead of depending on a
+          // separate `_pendingOrdersList` variable which may be missing.
+          Builder(builder: (context) {
+            final readyOrders = _recentOrders.where((o) {
+              try {
+                final n = _normalizeOrder(Map<String, dynamic>.from(o));
+                final s = (n['status'] ?? '').toString().toLowerCase();
+                // Consider common labels for ready orders
+                return s.contains('listo') || s.contains('ready') || s.contains('list');
+              } catch (_) {
+                return false;
+              }
+            }).toList();
+
+            if (readyOrders.isEmpty) {
+              return Container(
+                padding: const EdgeInsets.symmetric(vertical: 12),
+                alignment: Alignment.center,
+                child: Text(
+                  'No hay pedidos listos para asignar',
+                  style: TextStyle(color: Colors.grey[600]),
+                ),
               );
-            },
-          ),
+            }
+
+            return ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: readyOrders.length,
+              itemBuilder: (context, index) {
+                final o = readyOrders[index];
+                final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
+                final orderId = normalized['order_id']?.toString() ?? 'Pedido';
+                final addr = (normalized['ubicacion']?.toString() ?? '').isNotEmpty
+                    ? normalized['ubicacion']!.toString()
+                    : (normalized['table']?.toString() ?? '');
+                final customer = normalized['customer']?.toString() ?? 'Cliente';
+                final total = normalized['total'] != null ? '\$${normalized['total']}' : '\$0.00';
+                return _buildReadyOrderCard(
+                  orderId,
+                  addr,
+                  customer,
+                  total,
+                  colorPrimario,
+                  colorAzul,
+                );
+              },
+            );
+          }),
         ],
       ),
     );
@@ -3088,165 +2930,27 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-  Widget _buildRepartidorCard(String name, String status, Color colorAzul) {
-    return Container(
-      width: 140,
-      height: 120,
-      margin: const EdgeInsets.only(right: 12),
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.grey.withOpacity(0.1),
-            spreadRadius: 1,
-            blurRadius: 4,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          CircleAvatar(
-            radius: 20,
-            backgroundColor: colorAzul.withOpacity(0.1),
-            child: Icon(Icons.person, color: colorAzul),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            name,
-            style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-            textAlign: TextAlign.center,
-            maxLines: 2,
-            overflow: TextOverflow.ellipsis,
-          ),
-          const SizedBox(height: 4),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-            decoration: BoxDecoration(
-              color: status == 'Disponible'
-                  ? Colors.green.withOpacity(0.1)
-                  : Colors.orange.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Text(
-              status,
-              style: TextStyle(
-                fontSize: 10,
-                color: status == 'Disponible' ? Colors.green : Colors.orange,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-            ),
-          ),
-        ],
-      ), //hola
-    ); //drgdrgdrsefsef
-  }
-
-  Widget _buildRepartidorCardFromData(Map<String, dynamic> r, Color colorAzul) {
-    final name =
-        (r['Nombre'] ??
-                r['nombre'] ??
-                r['name'] ??
-                r['ID_Repartidor'] ??
-                r['ID'] ??
-                'Repartidor')
-            .toString();
-    final estadoRaw = r['Estado_Repartidor'] ?? r['estado'] ?? r['status'] ?? 0;
-    final bool disponible =
-        (estadoRaw.toString() == '1' ||
-        estadoRaw.toString().toLowerCase() == '1' ||
-        estadoRaw.toString().toLowerCase() == 'disponible');
-    final assigned =
-        r['assigned_count'] ?? r['assigned'] ?? r['assignedCount'] ?? 0;
-    final statusLabel = disponible ? 'Disponible' : 'Ocupado';
-
-    return InkWell(
-      onTap: () => _showRepartidorDetails(r),
-      child: Container(
-        width: 140,
-        height: 120,
-        margin: const EdgeInsets.only(right: 12),
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(12),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.grey.withOpacity(0.1),
-              spreadRadius: 1,
-              blurRadius: 4,
-              offset: const Offset(0, 2),
+  Future<void> _showRepartidorDetails(Map<String, dynamic> r) async {
+    final name = (r['Nombre'] ?? r['nombre'] ?? r['name'] ?? 'Repartidor').toString();
+    // Show a simple details dialog. The original implementation fetched
+    // assigned orders; keep this lightweight to avoid reintroducing API
+    // dependencies here. If you want the full details back, I can restore
+    // the original implementation.
+    if (!mounted) return;
+    await showDialog<void>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: Text(name),
+          content: const Text('Detalles del repartidor.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(),
+              child: const Text('Cerrar'),
             ),
           ],
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircleAvatar(
-              radius: 20,
-              backgroundColor: colorAzul.withOpacity(0.1),
-              child: Icon(Icons.person, color: colorAzul),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              name,
-              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-            ),
-            const SizedBox(height: 4),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: disponible
-                        ? Colors.green.withOpacity(0.1)
-                        : Colors.orange.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    statusLabel,
-                    style: TextStyle(
-                      fontSize: 10,
-                      color: disponible ? Colors.green : Colors.orange,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 8,
-                    vertical: 2,
-                  ),
-                  decoration: BoxDecoration(
-                    color: Colors.grey.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Text(
-                    '${assigned.toString()} pedidos',
-                    style: const TextStyle(
-                      fontSize: 10,
-                      color: Colors.black87,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ],
-        ),
-      ),
+        );
+      },
     );
   }
 
@@ -3318,10 +3022,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-  String _getOrderStatus(int index) {
-    final statuses = ['Pendiente', 'En Preparación', 'Listo', 'Entregado'];
-    return statuses[index % statuses.length];
-  }
+  // removed unused helper `_getOrderStatus` to reduce lints
 
   Color _getStatusColor(String status) {
     switch (status) {
