@@ -3,6 +3,7 @@ import 'dart:typed_data';
 import 'dart:async';
 import 'package:image_picker/image_picker.dart';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:http/http.dart' as http;
 import '../services/api_config.dart';
 import '../widgets/repartidores_list.dart';
@@ -183,6 +184,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   late StreamSubscription<bool> _menuSubscription;
   late StreamSubscription<Map<String, dynamic>> _orderSubscription;
   List<Map<String, dynamic>> _recentOrders = [];
+  bool _showHistory = false; // false = hide delivered by default
+  String _statusFilter = 'Todos';
   int _pendingOrderCount = 0; // contador de pedidos nuevos no leídos
   Timer? _pollTimer;
   List<Map<String, dynamic>> _repartidores = [];
@@ -191,6 +194,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   void initState() {
     super.initState();
     _fetchCategorias();
+    // Cargar preferencia de mostrar historial (persistida)
+    _loadShowHistory();
     _fetchMenuItems();
     // Suscribirse a cambios en el menú para refrescar automáticamente
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
@@ -215,16 +220,20 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         setState(() {
           if (safeOrder != null) {
             final normalized = _normalizeOrder(safeOrder);
-            // evitar duplicados por order_id
+            // evitar duplicados por order_id; si existe, actualizar el registro
             final incomingId = normalized['order_id']?.toString();
-            final exists = _recentOrders.any(
-              (r) => r['order_id']?.toString() == incomingId,
-            );
-            if (!exists) _recentOrders.insert(0, normalized);
+            final idx = _recentOrders.indexWhere((r) => r['order_id']?.toString() == incomingId);
+            if (idx == -1) {
+              _recentOrders.insert(0, normalized);
+              // Incrementar contador de pedidos pendientes solo si es nuevo
+              _pendingOrderCount = (_pendingOrderCount) + 1;
+            } else {
+              _recentOrders[idx] = normalized;
+            }
           }
-          // Incrementar contador de pedidos pendientes y notificar al usuario
-          _pendingOrderCount = (_pendingOrderCount) + 1;
         });
+        // Persistir cache local de pedidos recientes
+        try { _saveRecentOrdersCache(); } catch (_) {}
 
         // Mostrar SnackBar de notificación en un post-frame callback para evitar
         // problemas si el Scaffold aún no está totalmente montado.
@@ -257,8 +266,11 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
         print('empleado: order subscription error: $e');
       }
     });
-    // Iniciar polling periódico para detectar pedidos pendientes desde el servidor
-    _startPolling();
+    // Cargar cache local de pedidos recientes (si existe), antes de empezar polling
+    _loadRecentOrdersCache().then((_) {
+      // Iniciar polling periódico para detectar pedidos pendientes desde el servidor
+      _startPolling();
+    });
     // Cargar lista de repartidores inicialmente
     _loadRepartidores();
   }
@@ -298,8 +310,13 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       final resp = await http.post(
         Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'action': 'get_pending_orders'}),
+        body: json.encode({'action': 'get_pending_orders', 'include_assigned': true}),
       );
+      // Debug: print response status and body to help troubleshooting
+      try {
+        // ignore: avoid_print
+        print('[empleado] _pollPendingOrders: status=${resp.statusCode} body=${resp.body}');
+      } catch (_) {}
       if (resp.statusCode != 200) return;
       final decoded = json.decode(resp.body);
       List<dynamic> ordersRaw = [];
@@ -315,6 +332,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       }
 
       if (ordersRaw.isEmpty) return;
+      try {
+        // ignore: avoid_print
+        print('[empleado] _pollPendingOrders: fetched ${ordersRaw.length} ordersRaw entries');
+      } catch (_) {}
 
       // Normalize and merge new orders into _recentOrders avoiding duplicates
       final fetched = List<Map<String, dynamic>>.from(
@@ -340,6 +361,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           _pendingOrderCount = (_pendingOrderCount) + newCount;
         }
       });
+      if (newCount > 0) {
+        try { _saveRecentOrdersCache(); } catch (_) {}
+      }
 
       // Refrescar repartidores también para mantener contadores actualizados
       _loadRepartidores();
@@ -374,6 +398,126 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     } catch (e) {
       // ignore: avoid_print
       print('empleado: load repartidores error: $e');
+    }
+  }
+
+  // Persistir/recuperar cache local de pedidos recientes para mantener estado
+  Future<void> _saveRecentOrdersCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'empleado_recent_orders';
+      final list = _recentOrders.map((e) => json.encode(e)).toList();
+      await prefs.setStringList(key, list);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  // Persistir la preferencia de mostrar historial entre sesiones
+  Future<void> _loadShowHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'empleado_show_history';
+      final val = prefs.getBool(key) ?? false;
+      if (!mounted) return;
+      setState(() {
+        _showHistory = val;
+      });
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  Future<void> _saveShowHistory() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'empleado_show_history';
+      await prefs.setBool(key, _showHistory);
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  void _toggleShowHistory() {
+    setState(() {
+      _showHistory = !_showHistory;
+    });
+    try {
+      _saveShowHistory();
+    } catch (_) {}
+    // If turning on history, fetch historical orders from server (admin endpoint)
+    if (_showHistory) {
+      _loadHistoryOrders();
+    } else {
+      // when hiding history, refresh pending orders from server
+      _pollPendingOrders();
+    }
+  }
+
+  // Cargar pedidos históricos (entregados) usando el endpoint admin `get_all_orders`
+  Future<void> _loadHistoryOrders() async {
+    try {
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        headers: {'Content-Type': 'application/json'},
+        body: json.encode({'action': 'get_all_orders', 'limit': 1000}),
+      );
+      if (resp.statusCode != 200) return;
+      final decoded = json.decode(resp.body);
+      List<dynamic> ordersRaw = [];
+      if (decoded is Map && decoded['orders'] != null) ordersRaw = decoded['orders'];
+      else if (decoded is List) ordersRaw = decoded;
+      if (ordersRaw.isEmpty) return;
+
+      final fetched = List<Map<String, dynamic>>.from(
+        ordersRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
+      );
+
+      // Keep only delivered/cancelled (history) entries
+      final history = <Map<String, dynamic>>[];
+      for (final o in fetched) {
+        try {
+          final norm = _normalizeOrder(Map<String, dynamic>.from(o));
+          if (_isDelivered(norm)) history.add(norm);
+        } catch (_) {}
+      }
+      if (!mounted) return;
+      setState(() {
+        // Replace recent orders list with history entries (most recent first)
+        _recentOrders = history;
+      });
+      try { _saveRecentOrdersCache(); } catch (_) {}
+    } catch (e) {
+      // ignore
+    }
+  }
+
+  Future<void> _loadRecentOrdersCache() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'empleado_recent_orders';
+      final list = prefs.getStringList(key) ?? [];
+      final loaded = <Map<String, dynamic>>[];
+      for (final s in list) {
+        try {
+          final m = json.decode(s);
+          if (m is Map<String, dynamic>) loaded.add(m);
+        } catch (_) {}
+      }
+      if (loaded.isNotEmpty) {
+        if (!mounted) return;
+        setState(() {
+          // merge loaded entries at the front, avoiding duplicates
+          for (final e in loaded.reversed) {
+            final oid = e['order_id']?.toString();
+            if (oid == null) continue;
+            final exists = _recentOrders.any((r) => r['order_id']?.toString() == oid);
+            if (!exists) _recentOrders.insert(0, e);
+          }
+        });
+      }
+    } catch (e) {
+      // ignore
     }
   }
 
@@ -508,6 +652,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               _recentOrders[idx]['status'] = status;
             }
           });
+          try { _saveRecentOrdersCache(); } catch (_) {}
           // Notificar a otras pantallas en la app
           try {
             final notify = {'order_id': sanitizedOrderId, 'status': status};
@@ -1904,6 +2049,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     const Color colorNaranja = Color.fromARGB(255, 255, 152, 0);
     const Color colorAzul = Color.fromARGB(255, 33, 150, 243);
 
+    
+
     return Scaffold(
       backgroundColor: colorFondo,
       appBar: AppBar(
@@ -2371,6 +2518,49 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
   // ✅ TOMAR PEDIDOS
   Widget _buildTomarPedidos(Color colorPrimario, Color colorNaranja) {
+    // preparar lista mostrada: por defecto ocultar entregados; si _showHistory==true
+    // mostrar sólo pedidos entregados (historial)
+    bool matchesFilter(Map<String, dynamic> src) {
+      try {
+        final n = _normalizeOrder(Map<String, dynamic>.from(src));
+        final statusRaw = (n['status'] ?? '').toString().toLowerCase();
+        final low = statusRaw;
+        if (_statusFilter == 'Todos') return true;
+        switch (_statusFilter) {
+          case 'Pendientes':
+            return low.contains('pend') || low.contains('confirm');
+          case 'En Preparación':
+            return low.contains('prepar');
+          case 'Listos':
+            return low.contains('listo');
+          case 'En Entrega':
+            return low.contains('camino') || low.contains('entreg') || low.contains('en camino');
+          case 'Entregados':
+            return _isDelivered(n);
+          case 'Cancelados':
+            return low.contains('cancel');
+          default:
+            return true;
+        }
+      } catch (_) {
+        return true;
+      }
+    }
+
+    final List<Map<String, dynamic>> displayOrders = _recentOrders.where((o) {
+      try {
+        final n = _normalizeOrder(Map<String, dynamic>.from(o));
+        if (_showHistory) {
+          // when showing history, ignore the status filter and show delivered orders
+          return _isDelivered(n);
+        } else {
+          return !_isDelivered(n) && matchesFilter(o);
+        }
+      } catch (_) {
+        return true;
+      }
+    }).toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
       child: Column(
@@ -2410,93 +2600,117 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
           const SizedBox(height: 20),
 
-          // Filtros de estado con mejor scroll
-          SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 4),
-            child: Row(
-              children: [
-                _buildStatusChip('Todos', true, colorPrimario),
-                const SizedBox(width: 8),
-                _buildStatusChip('Pendientes', false, colorNaranja),
-                const SizedBox(width: 8),
-                _buildStatusChip('En Preparación', false, Colors.blue),
-                const SizedBox(width: 8),
-                _buildStatusChip('Listos', false, Colors.green),
-                const SizedBox(width: 8),
-                _buildStatusChip('En Entrega', false, Colors.purple),
-                const SizedBox(width: 8),
-                _buildStatusChip('Entregados', false, Colors.grey),
-                const SizedBox(width: 8),
-                _buildStatusChip('Cancelados', false, Colors.red),
-              ],
-            ),
-          ),
+              // Filtros de estado con mejor scroll + botón refrescar
+              Row(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Row(
+                        children: [
+                          _buildStatusChip('Todos', colorPrimario),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('Pendientes', colorNaranja),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('En Preparación', Colors.blue),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('Listos', Colors.green),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('En Entrega', Colors.purple),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('Entregados', Colors.grey),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('Cancelados', Colors.red),
+                          const SizedBox(width: 8),
+                          _buildStatusChip('Historial', Colors.teal),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  IconButton(
+                    onPressed: () {
+                      // refrescar manualmente (traer desde servidor)
+                      _pollPendingOrders();
+                      _loadRepartidores();
+                    },
+                    icon: const Icon(Icons.refresh),
+                    tooltip: 'Refrescar pedidos',
+                  ),
+                ],
+              ),
 
           const SizedBox(height: 20),
 
-          // Lista de pedidos (primero pedidos recientes desde OrderService)
-          if (_recentOrders.isNotEmpty) ...[
-            const SizedBox(height: 8),
-            const Text(
-              'Pedidos recientes',
-              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 8),
-            Column(
-              children: _recentOrders.map((o) {
-                final normalized = _normalizeOrder(
-                  Map<String, dynamic>.from(o),
-                );
-                final orderNumber =
-                    normalized['order_id']?.toString() ?? 'Pedido';
-                final customer =
-                    normalized['customer']?.toString() ?? 'Cliente';
-                final table = normalized['table']?.toString() ?? '';
-                final ubicacion = normalized['ubicacion']?.toString() ?? '';
-                final isDelivery = ubicacion.isNotEmpty;
-                final status = normalized['status']?.toString() ?? 'Pendiente';
-                final total = normalized['total'] != null
-                    ? '\$${normalized['total']}'
-                    : '\$0.00';
-                final payment = normalized['payment_method']?.toString() ?? '';
-                return _buildOrderCard(
-                  orderNumber,
-                  customer,
-                  isDelivery ? ubicacion : table,
-                  status,
-                  total,
-                  isDelivery,
-                  colorPrimario,
-                  colorNaranja,
-                  payment,
-                  normalized,
-                );
-              }).toList(),
-            ),
-            const SizedBox(height: 16),
-          ],
+          const SizedBox(height: 8),
 
-          // Lista simulada si no hay pedidos recientes o para mostrar más
-          ListView.builder(
-            shrinkWrap: true,
-            physics: const NeverScrollableScrollPhysics(),
-            itemCount: 6,
-            itemBuilder: (context, index) {
-              return _buildOrderCard(
-                'Pedido #${1000 + index}',
-                'Cliente ${index + 1}',
-                'Mesa ${index + 1}',
-                _getOrderStatus(index),
-                '\$${(index + 1) * 25}.00',
-                false,
-                colorPrimario,
-                colorNaranja,
-                '',
-                null,
-              );
-            },
-          ),
+          // Lista de pedidos (primero pedidos recientes desde OrderService)
+          displayOrders.isNotEmpty
+              ? Column(
+                  children: [
+                    const SizedBox(height: 8),
+                    Text(
+                      _showHistory ? 'Historial de entregados' : 'Pedidos recientes',
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                    const SizedBox(height: 8),
+                    Column(
+                      children: displayOrders.map((o) {
+                        final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
+                        final orderNumber =
+                            normalized['order_id']?.toString() ?? 'Pedido';
+                        final customer =
+                            normalized['customer']?.toString() ?? 'Cliente';
+                        final table = normalized['table']?.toString() ?? '';
+                        final ubicacion = normalized['ubicacion']?.toString() ?? '';
+                        final isDelivery = ubicacion.isNotEmpty;
+                        final status = normalized['status']?.toString() ?? 'Pendiente';
+                        final total = normalized['total'] != null
+                            ? '\$${normalized['total']}'
+                            : '\$0.00';
+                        final payment = normalized['payment_method']?.toString() ?? '';
+                        return _buildOrderCard(
+                          orderNumber,
+                          customer,
+                          isDelivery ? ubicacion : table,
+                          status,
+                          total,
+                          isDelivery,
+                          colorPrimario,
+                          colorNaranja,
+                          payment,
+                          normalized,
+                        );
+                      }).toList(),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
+                )
+              : const SizedBox.shrink(),
+
+          // Lista simulada (sólo mostrar si no hay pedidos reales en displayOrders)
+          displayOrders.isEmpty
+              ? ListView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  itemCount: 6,
+                  itemBuilder: (context, index) {
+                    return _buildOrderCard(
+                      'Pedido #${1000 + index}',
+                      'Cliente ${index + 1}',
+                      'Mesa ${index + 1}',
+                      _getOrderStatus(index),
+                      '\$${(index + 1) * 25}.00',
+                      false,
+                      colorPrimario,
+                      colorNaranja,
+                      '',
+                      null,
+                    );
+                  },
+                )
+              : const SizedBox.shrink(),
         ],
       ),
     );
@@ -2665,22 +2879,51 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-  Widget _buildStatusChip(String label, bool isSelected, Color color) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      decoration: BoxDecoration(
-        color: isSelected ? color : Colors.white,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: isSelected ? color : Colors.grey[300]!),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(
-          color: isSelected ? Colors.white : Colors.grey[700],
-          fontWeight: FontWeight.w500,
+  Widget _buildStatusChip(String label, Color color) {
+    final bool isSelected = label == 'Historial' ? _showHistory : (_statusFilter == label);
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          if (label == 'Historial') {
+            _toggleShowHistory();
+          } else {
+            _statusFilter = label;
+            // when selecting normal filters, hide historial
+            _showHistory = false;
+            _saveShowHistory();
+          }
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? color : Colors.white,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: isSelected ? color : Colors.grey[300]!),
+        ),
+        child: Text(
+          label,
+          style: TextStyle(
+            color: isSelected ? Colors.white : Colors.grey[700],
+            fontWeight: FontWeight.w500,
+          ),
         ),
       ),
     );
+  }
+
+  bool _isDelivered(Map<String, dynamic> normalized) {
+    final raw = (normalized['status'] ?? normalized['Estado_Pedido'] ?? normalized['estado'] ?? '') .toString();
+    final low = raw.toLowerCase().trim();
+    if (low.isEmpty) return false;
+    // numeric '3' often represents delivered
+    final maybeNum = int.tryParse(low);
+    if (maybeNum != null && maybeNum == 3) return true;
+    if (low.contains('entreg') || low.contains('finaliz') || low.contains('cancel')) {
+      // 'entreg' covers 'entregado', 'entrega'
+      return low.contains('entreg');
+    }
+    return low == 'entregado' || low == 'finalizado';
   }
 
   // Nota: en la vista de empleado, las tarjetas de platillos se generan

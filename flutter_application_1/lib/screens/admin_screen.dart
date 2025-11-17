@@ -3,6 +3,7 @@ import '../widgets/flexible_image.dart';
 import 'empresa_screen.dart';
 import 'usuario_screen.dart';
 import 'menu_screen.dart';
+import 'admin_orders_screen.dart';
 
 class AdminScreen extends StatefulWidget {
   const AdminScreen({super.key});
@@ -208,6 +209,20 @@ class _AdminScreenState extends State<AdminScreen> {
                     ScaffoldMessenger.of(context).showSnackBar(
                       const SnackBar(
                         content: Text('Funcionalidad en desarrollo'),
+                      ),
+                    );
+                  },
+                ),
+                _buildAdminCard(
+                  'Historial\nPedidos',
+                  'Ver y administrar todo el historial de pedidos',
+                  Icons.history,
+                  Colors.teal,
+                  () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (context) => const AdminOrdersScreen(),
                       ),
                     );
                   },

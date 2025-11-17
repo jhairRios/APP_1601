@@ -1404,6 +1404,11 @@ class _ClienteScreenState extends State<ClienteScreen>
                                     final decoded = resp.statusCode == 200
                                         ? json.decode(resp.body)
                                         : null;
+                                    // Debug: log server response for create_order
+                                    try {
+                                      // ignore: avoid_print
+                                      print('[cliente] create_order: status=${resp.statusCode} body=${resp.body}');
+                                    } catch (_) {}
                                     if (decoded != null &&
                                         decoded['success'] == true) {
                                       final orderId =
@@ -1443,6 +1448,11 @@ class _ClienteScreenState extends State<ClienteScreen>
                                       // pueda ver su pedido en "Mis Pedidos" aunque no esté logueado.
                                       try {
                                         if (orderId != null) {
+                                            try {
+                                              // Debug: confirm order id returned
+                                              // ignore: avoid_print
+                                              print('[cliente] create_order: order_id=${orderId}');
+                                            } catch (_) {}
                                           final prefs =
                                               await SharedPreferences.getInstance();
                                           final key = 'my_order_ids';
@@ -1456,6 +1466,31 @@ class _ClienteScreenState extends State<ClienteScreen>
                                               existing,
                                             );
                                           }
+                                          // Also persist a lightweight local cache of the order
+                                          // so the client can show it even if the server later
+                                          // doesn't return details (offline or race conditions).
+                                          try {
+                                            final cacheKey = 'my_orders_cache';
+                                            final cache = prefs.getStringList(cacheKey) ?? [];
+                                            // Build a small summary object
+                                            final summary = {
+                                              'order_id': sid,
+                                              'items': confirmedItems,
+                                              'total': confirmedTotal,
+                                              'ubicacion': confirmedUbicacion,
+                                              'telefono': confirmedTelefono,
+                                              'timestamp': DateTime.now().toIso8601String(),
+                                            };
+                                            cache.removeWhere((s) {
+                                              try {
+                                                final m = json.decode(s);
+                                                return m != null && (m['order_id']?.toString() == sid);
+                                              } catch (_) { return false; }
+                                            });
+                                            cache.insert(0, json.encode(summary));
+                                            await prefs.setStringList(cacheKey, cache);
+                                          } catch (_) {}
+
                                           // refrescar vista de pedidos
                                           _loadMyOrders();
                                         }
@@ -2313,6 +2348,35 @@ class _ClienteScreenState extends State<ClienteScreen>
             'pedido': detail['pedido'] ?? {},
             'items': detail['items'] ?? [],
           });
+        } else {
+          // fallback: buscar en cache local si existe un resumen guardado
+          try {
+            final cache = prefs.getStringList('my_orders_cache') ?? [];
+            Map<String, dynamic>? summary;
+            for (final s in cache) {
+              try {
+                final m = json.decode(s);
+                if (m != null && (m['order_id']?.toString() == id.toString())) {
+                  summary = Map<String, dynamic>.from(m);
+                  break;
+                }
+              } catch (_) {}
+            }
+            if (summary != null) {
+              loaded.add({
+                'order_id': id,
+                'pedido': {
+                  'ID': id,
+                  'Total': summary['total'],
+                  'Ubicacion': summary['ubicacion'],
+                  'Telefono': summary['telefono'],
+                  'cached': true,
+                  'timestamp': summary['timestamp'],
+                },
+                'items': List<dynamic>.from(summary['items'] ?? []),
+              });
+            }
+          } catch (_) {}
         }
       }
       setState(() {

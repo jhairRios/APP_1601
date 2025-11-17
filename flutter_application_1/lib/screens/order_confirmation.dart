@@ -205,10 +205,19 @@ class _OrderConfirmationScreenState extends State<OrderConfirmationScreen> {
                     width: double.infinity,
                     child: ElevatedButton(
                       onPressed: () {
-                        // Volver a la pantalla principal (pop hasta la primera ruta)
-                        Navigator.of(
-                          context,
-                        ).popUntil((route) => route.isFirst);
+                        // Volver a la vista previa (mantener el contexto/rol actual).
+                        // Si hay una ruta previa en la pila, simplemente hacer pop.
+                        // Si no hay previas (caso raro), reemplazamos por '/menu' como último recurso.
+                        try {
+                          if (Navigator.of(context).canPop()) {
+                            Navigator.of(context).pop();
+                          } else {
+                            Navigator.of(context).pushReplacementNamed('/menu');
+                          }
+                        } catch (_) {
+                          // Fallback más seguro: intentar popUntil al primer route
+                          try { Navigator.of(context).popUntil((route) => route.isFirst); } catch (_) {}
+                        }
                       },
                       child: const Text('Volver al menú'),
                     ),

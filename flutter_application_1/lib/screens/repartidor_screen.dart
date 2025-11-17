@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'dart:convert';
+import 'dart:async';
 import 'package:http/http.dart' as http;
 import 'dart:math' as math;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../widgets/flexible_image.dart';
 import '../services/api_config.dart';
+import '../services/order_service.dart';
 import '../utils/web_open.dart';
 
 class RepartidorScreen extends StatefulWidget {
@@ -26,6 +28,8 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
   String? _myRawResponse;
   String? _pendingRawResponse;
   String? _currentRepartidorId;
+  late StreamSubscription<Map<String, dynamic>> _orderSubscription;
+  Timer? _pollTimer;
 
   @override
   Widget build(BuildContext context) {
@@ -149,7 +153,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'action': 'get_order_detail', 'order_id': orderId}),
       );
-      Navigator.of(context).pop();
+      if (mounted) Navigator.of(context).pop();
       if (resp.statusCode == 200) {
         final decoded = json.decode(resp.body);
         if (decoded != null && decoded['success'] == true) {
@@ -157,11 +161,13 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
           final ubicacion = (pedido['Ubicacion'] ?? pedido['ubicacion'] ?? '')
               .toString();
           if (ubicacion.trim().isEmpty) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(
-                content: Text('No hay ubicación disponible para este pedido'),
-              ),
-            );
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('No hay ubicación disponible para este pedido'),
+                ),
+              );
+            }
             return;
           }
           final mapsUrl =
@@ -178,7 +184,9 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
                 content: SelectableText(mapsUrl),
                 actions: [
                   TextButton(
-                    onPressed: () => Navigator.of(ctx).pop(),
+                    onPressed: () {
+                      if (Navigator.of(ctx).canPop()) Navigator.of(ctx).pop();
+                    },
                     child: const Text('Cerrar'),
                   ),
                 ],
@@ -188,18 +196,20 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
           return;
         }
       }
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('No se pudo obtener el detalle del pedido'),
-        ),
-      );
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('No se pudo obtener el detalle del pedido'),
+          ),
+        );
+      }
     } catch (e) {
       try {
-        Navigator.of(context).pop();
+        if (mounted) Navigator.of(context).pop();
       } catch (_) {}
-      ScaffoldMessenger.of(
-        context,
-      ).showSnackBar(SnackBar(content: Text('Error: $e')));
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+      }
     }
   }
 
@@ -384,11 +394,57 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
   @override
   void initState() {
     super.initState();
-    // cargar listas
+    // cargar cache local primero para mostrar algo inmediatamente
+    _loadOrderCaches();
+    // cargar listas desde servidor
     _loadPendingOrders();
     _loadMyOrders();
     // cargar id de repartidor (si existe)
     _loadRepartidorId();
+    // Suscribirse a notificaciones locales de nuevos pedidos (mismo proceso)
+    try {
+      _orderSubscription = OrderService.orderStream.listen((order) {
+        try {
+          debugPrint('[repartidor] received order notify -> ${order.toString()}');
+          // Forzar recarga para reflejar nuevos pedidos creados por clientes
+          _loadPendingOrders();
+          _loadMyOrders();
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            if (!mounted) return;
+            try {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Nuevo pedido recibido')),
+              );
+            } catch (_) {}
+          });
+        } catch (e) {
+          debugPrint('[repartidor] order subscription handler error: $e');
+        }
+      });
+    } catch (e) {
+      debugPrint('[repartidor] order subscription setup failed: $e');
+    }
+
+    // Iniciar polling periódico para asegurarnos de recibir pedidos cuando
+    // la notificación local no aplique (por ejemplo multi-dispositivo).
+    try {
+      _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
+        _loadPendingOrders();
+      });
+    } catch (e) {
+      debugPrint('[repartidor] poll timer failed: $e');
+    }
+  }
+
+  @override
+  void dispose() {
+    try {
+      _orderSubscription.cancel();
+    } catch (_) {}
+    try {
+      _pollTimer?.cancel();
+    } catch (_) {}
+    super.dispose();
   }
 
   Future<void> _loadRepartidorId() async {
@@ -997,6 +1053,43 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     }
   }
 
+  // Persistir/recuperar cache local de pedidos para mantener UI consistente
+  Future<void> _saveOrderCaches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('pending_orders_cache', json.encode(_pendingOrders));
+      await prefs.setString('my_orders_cache', json.encode(_myOrders));
+    } catch (e) {
+      debugPrint('[repartidor] _saveOrderCaches failed: $e');
+    }
+  }
+
+  Future<void> _loadOrderCaches() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final p = prefs.getString('pending_orders_cache');
+      final m = prefs.getString('my_orders_cache');
+      if (p != null && p.isNotEmpty) {
+        final parsed = json.decode(p);
+        if (parsed is List) {
+          setState(() {
+            _pendingOrders = List<Map<String, dynamic>>.from(parsed.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}));
+          });
+        }
+      }
+      if (m != null && m.isNotEmpty) {
+        final parsed = json.decode(m);
+        if (parsed is List) {
+          setState(() {
+            _myOrders = List<Map<String, dynamic>>.from(parsed.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}));
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('[repartidor] _loadOrderCaches failed: $e');
+    }
+  }
+
   Future<void> _loadMyOrders() async {
     setState(() {
       _loadingMy = true;
@@ -1086,7 +1179,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     }
     try {
       // sanitize order id to digits only (defensive: some sources may include '#')
-      final sanitizedOrderId = (orderId ?? '').toString().replaceAll(
+      final sanitizedOrderId = orderId.toString().replaceAll(
         RegExp(r'[^0-9]'),
         '',
       );
@@ -1110,8 +1203,39 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(const SnackBar(content: Text('Pedido asignado')));
-        await _loadPendingOrders();
-        await _loadMyOrders();
+        // Si el servidor devuelve la fila actualizada, sincronizamos cache y listas inmediatamente
+        final updated = decoded['order'];
+        if (updated != null && updated is Map) {
+          final up = Map<String, dynamic>.from(updated);
+          final oid = (up['ID_Pedido'] ?? up['id'] ?? up['ID'] ?? up['order_id'] ?? '').toString();
+          setState(() {
+            // remover de pendientes
+            _pendingOrders.removeWhere((o) {
+              final existingId = (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '').toString();
+              return existingId == oid;
+            });
+            // agregar a mis pedidos si no existe
+            final exists = _myOrders.any((o) {
+              final existingId = (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '').toString();
+              return existingId == oid;
+            });
+            if (!exists) {
+              _myOrders.insert(0, up);
+            } else {
+              // actualizar si ya existía
+              for (int i = 0; i < _myOrders.length; i++) {
+                final existingId = (_myOrders[i]['ID_Pedido'] ?? _myOrders[i]['id'] ?? _myOrders[i]['ID'] ?? _myOrders[i]['order_id'] ?? '').toString();
+                if (existingId == oid) { _myOrders[i] = up; break; }
+              }
+            }
+          });
+          try { await _saveOrderCaches(); } catch (_) {}
+          // notificar a otros listeners locales (empleado/cliente en mismo dispositivo)
+          try { OrderService.notifyNewOrder(up); } catch (_) {}
+        } else {
+          await _loadPendingOrders();
+          await _loadMyOrders();
+        }
       } else {
         final msg = decoded?['message'] ?? 'Error asignando';
         ScaffoldMessenger.of(
@@ -1131,7 +1255,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
 
   Future<void> _updateOrderStatus(String orderId, String status) async {
     try {
-      final sanitizedOrderId = (orderId ?? '').toString().replaceAll(
+      final sanitizedOrderId = orderId.toString().replaceAll(
         RegExp(r'[^0-9]'),
         '',
       );
@@ -1155,7 +1279,39 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         ScaffoldMessenger.of(
           context,
         ).showSnackBar(SnackBar(content: Text('Estado actualizado: $status')));
-        await _loadMyOrders();
+        // actualizar la fila localmente si el servidor la devolvió
+        final updated = decoded['order'];
+        if (updated != null && updated is Map) {
+          final up = Map<String, dynamic>.from(updated);
+          final oid = (up['ID_Pedido'] ?? up['id'] ?? up['ID'] ?? up['order_id'] ?? '').toString();
+          setState(() {
+            // intentar actualizar en mis pedidos
+            var updatedInMy = false;
+            for (int i = 0; i < _myOrders.length; i++) {
+              final existingId = (_myOrders[i]['ID_Pedido'] ?? _myOrders[i]['id'] ?? _myOrders[i]['ID'] ?? _myOrders[i]['order_id'] ?? '').toString();
+              if (existingId == oid) {
+                _myOrders[i] = up;
+                updatedInMy = true;
+                break;
+              }
+            }
+            if (!updatedInMy) {
+              // If it's not in myOrders but now assigned to me, insert it
+              _myOrders.insert(0, up);
+            }
+            // Also remove from pending if status moved past available
+            if (status == 'En Camino' || status == 'Entregado') {
+              _pendingOrders.removeWhere((o) {
+                final existingId = (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '').toString();
+                return existingId == oid;
+              });
+            }
+          });
+          try { await _saveOrderCaches(); } catch (_) {}
+          try { OrderService.notifyNewOrder(up); } catch (_) {}
+        } else {
+          await _loadMyOrders();
+        }
       } else {
         final msg = decoded?['message'] ?? 'Error actualizando';
         // Mostrar el mensaje legible y conservar la respuesta completa en logs
@@ -1288,13 +1444,11 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: orderId == null
-                      ? null
+                  onPressed: (orderId == null || status == 'En Camino' || status == 'Entregado')
+                      ? (orderId == null ? null : () async {})
                       : () async {
-                          final next = status == 'En Camino'
-                              ? 'Entregado'
-                              : 'En Camino';
-                          await _updateOrderStatus(orderId, next);
+                          // iniciar recorrido -> poner En Camino
+                          await _updateOrderStatus(orderId, 'En Camino');
                         },
                   style: ElevatedButton.styleFrom(
                     backgroundColor: colorVerde,
@@ -1303,8 +1457,28 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
                       borderRadius: BorderRadius.circular(8),
                     ),
                   ),
-                  icon: const Icon(Icons.check, size: 16),
-                  label: Text(status == 'En Camino' ? 'Entregado' : 'Iniciar'),
+                  icon: const Icon(Icons.directions_bike, size: 16),
+                  label: const Text('Iniciar'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: ElevatedButton.icon(
+                  onPressed: (orderId == null || status == 'Entregado')
+                      ? (orderId == null ? null : () async {})
+                      : () async {
+                          // marcar entregado
+                          await _updateOrderStatus(orderId, 'Entregado');
+                        },
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.blueGrey,
+                    foregroundColor: Colors.white,
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                  ),
+                  icon: const Icon(Icons.flag, size: 16),
+                  label: const Text('Entregado'),
                 ),
               ),
             ],

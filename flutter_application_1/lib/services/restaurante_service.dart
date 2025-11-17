@@ -6,7 +6,7 @@ class RestauranteService {
   // Base URL dinámico: en web usamos el origen actual (permite localhost dev),
   // en dispositivos usamos la IP de la máquina de desarrollo.
   // Usar la IP de la máquina de desarrollo siemprge (evita que en web se solicite el index.html)
-  static const String _baseUrl = 'http://localhost/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php';
+  static const String _baseUrl = 'http://app1601.ngrok.app/Aplicacion_1/APP1601/APP_1601/flutter_application_1/php/api.php';
 
   static Future<List<Map<String, dynamic>>> getRestaurantes() async {
     final response = await http.get(Uri.parse('$_baseUrl?action=get_restaurantes'));
