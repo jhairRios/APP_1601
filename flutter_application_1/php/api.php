@@ -17,10 +17,6 @@ $dbname = 'App1601';
 $username = 'admin';
 $password = 'JhairRios_2005';
 
-// Admin key for sensitive operations (can be set via env API_ADMIN_KEY). Change before production.
-$adminKeyEnv = getenv('API_ADMIN_KEY');
-$ADMIN_DELETE_KEY = ($adminKeyEnv !== false && $adminKeyEnv !== null) ? $adminKeyEnv : 'please-set-admin-key';
-
 try {
     // Conectar a la base de datos (incluye puerto y charset utf8mb4)
     $dsn = "mysql:host={$host};port={$port};dbname={$dbname};charset=utf8mb4";
@@ -37,12 +33,9 @@ try {
     $input_data = [];
     if ($_SERVER['REQUEST_METHOD'] == 'POST') {
         $content_type = $_SERVER['CONTENT_TYPE'] ?? '';
-        // Capturar el cuerpo crudo para debug y luego decodificar JSON si aplica
-        $raw_body = file_get_contents('php://input');
         if (strpos($content_type, 'application/json') !== false) {
-            $json_data = json_decode($raw_body, true);
+            $json_data = json_decode(file_get_contents('php://input'), true);
             if ($json_data) $input_data = $json_data;
-            else $input_data = [];
         } else {
             $input_data = $_POST;
         }
@@ -649,81 +642,94 @@ try {
                 error_log('create_order: inserted Platillos_Pedido item id=' . $nextId . ' name=' . $nombre . ' qty=' . $cantidad);
             }
 
-            // Auto-assign feature disabled: leave assignment manual so repartidores
-            // can take pedidos desde su vista. This simplifies behavior: orders
-            // created here remain with repartidor=NULL and must be claimed via
-            // the `assign_order` endpoint from the repartidor UI.
+            // Attempt to auto-assign an available repartidor (Estado_Repartidor = 1)
             $assignedRepartidor = null;
-            error_log('create_order: auto-assign disabled (manual assignment only)');
+            try {
+                // Determine possible repartidor column name in pedidos
+                $repartidorCol = null;
+                foreach ($cols as $c) {
+                    if (in_array(strtolower($c), ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) { $repartidorCol = $c; break; }
+                }
+                // Determine estado column name in pedidos
+                $estadoCol = null;
+                foreach ($cols as $c) {
+                    if (in_array(strtolower($c), ['estado','estado_pedido','status'])) { $estadoCol = $c; break; }
+                }
+
+                // If repartidor table exists and there is a repartidor available, assign
+                try {
+                    // Prefer repartidores who are online (Estado_Repartidor = 1) AND have less than 3 active assigned orders.
+                    // If pedidos has a repartidor column we can count current assignments; otherwise fallback to the old single-select.
+                    if ($repartidorCol !== null) {
+                        // determine idCol for pedidos (used later)
+                        $idCol = null;
+                        foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
+                        if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
+
+                        // Build a query that counts active (non-delivered/non-cancelled) orders per repartidor and picks one with < 3 assignments
+                        $estadoCond = ($estadoCol !== null) ? "AND (p.{$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado'))" : "";
+                        $sqlRep = "SELECT r.ID_Repartidor, COUNT(p.{$repartidorCol}) AS assigned_count ";
+                        $sqlRep .= "FROM repartidor r LEFT JOIN pedidos p ON p.{$repartidorCol} = r.ID_Repartidor {$estadoCond} ";
+                        $sqlRep .= "WHERE r.Estado_Repartidor = 1 GROUP BY r.ID_Repartidor HAVING assigned_count < 3 ORDER BY assigned_count ASC LIMIT 1 FOR UPDATE";
+                        $chkRep = $pdo->prepare($sqlRep);
+                        $chkRep->execute();
+                        $rrep = $chkRep->fetch(PDO::FETCH_ASSOC);
+                    } else {
+                        // fallback: pick any online repartidor
+                        $chkRep = $pdo->prepare("SELECT ID_Repartidor FROM repartidor WHERE Estado_Repartidor = 1 LIMIT 1 FOR UPDATE");
+                        $chkRep->execute();
+                        $rrep = $chkRep->fetch(PDO::FETCH_ASSOC);
+                    }
+
+                    if ($rrep && isset($rrep['ID_Repartidor'])) {
+                        $targetRepId = $rrep['ID_Repartidor'];
+                        // If pedidos table has a repartidor column, update it
+                        if ($repartidorCol !== null) {
+                            $sqlUpd = "UPDATE pedidos SET {$repartidorCol} = ?";
+                            $paramsUpd = [$targetRepId];
+                            if ($estadoCol !== null) { $sqlUpd .= ", {$estadoCol} = ?"; $paramsUpd[] = 'Asignado'; }
+                            $sqlUpd .= " WHERE {$idCol} = ?"; $paramsUpd[] = $orderId;
+                            $updStmt = $pdo->prepare($sqlUpd);
+                            $updStmt->execute($paramsUpd);
+                        }
+
+                        // After assignment, check how many active orders this repartidor now has.
+                        try {
+                            if ($repartidorCol !== null) {
+                                $cntSql = "SELECT COUNT(*) AS cnt FROM pedidos WHERE {$repartidorCol} = ?";
+                                if ($estadoCol !== null) $cntSql .= " AND ({$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado'))";
+                                $cntStmt = $pdo->prepare($cntSql);
+                                $cntStmt->execute([$targetRepId]);
+                                $cntRow = $cntStmt->fetch(PDO::FETCH_ASSOC);
+                                $assignedCount = intval($cntRow['cnt'] ?? 0);
+                                // If reached the limit, mark repartidor as temporarily unavailable
+                                if ($assignedCount >= 3) {
+                                    $updRep = $pdo->prepare("UPDATE repartidor SET Estado_Repartidor = 0 WHERE ID_Repartidor = ?");
+                                    $updRep->execute([$targetRepId]);
+                                }
+                            } else {
+                                // can't compute assignments; keep older behavior and mark busy
+                                $updRep = $pdo->prepare("UPDATE repartidor SET Estado_Repartidor = 0 WHERE ID_Repartidor = ?");
+                                $updRep->execute([$targetRepId]);
+                            }
+                        } catch (PDOException $e) {
+                            error_log('create_order: repartidor post-assign count check failed: ' . $e->getMessage());
+                        }
+
+                        $assignedRepartidor = $targetRepId;
+                        error_log('create_order: auto-assigned repartidor ' . $targetRepId);
+                    }
+                } catch (PDOException $e) {
+                    // If repartidor table missing or error, ignore assignment
+                    error_log('create_order: repartidor assign check failed: ' . $e->getMessage());
+                }
+            } catch (Exception $e) {
+                // ignore
+            }
 
             $pdo->commit();
             error_log('create_order: commit successful for order id=' . $orderId);
-
-            // Determinar columna ID real de la tabla `pedidos` y columna FK en Platillos_Pedido
-            try {
-                $colsStmt2 = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
-                $colsStmt2->execute([$dbname]);
-                $cols2 = $colsStmt2->fetchAll(PDO::FETCH_COLUMN, 0);
-                $idCol = null;
-                foreach ($cols2 as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
-                if ($idCol === null && count($cols2) > 0) $idCol = $cols2[0];
-            } catch (Exception $e) {
-                $idCol = null;
-            }
-
-            try {
-                $colsItemStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'Platillos_Pedido'");
-                $colsItemStmt->execute([$dbname]);
-                $itemCols = $colsItemStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-                $itemIdCol = null;
-                foreach ($itemCols as $c) { if (strtolower($c) === 'id_pedido') { $itemIdCol = $c; break; } }
-                if ($itemIdCol === null) {
-                    foreach ($itemCols as $c) { if (strpos(strtolower($c), 'pedido') !== false) { $itemIdCol = $c; break; } }
-                }
-                if ($itemIdCol === null) $itemIdCol = 'ID_Pedido';
-            } catch (Exception $e) {
-                $itemIdCol = 'ID_Pedido';
-            }
-
-            // Asegurar que el pedido quede sin repartidor y con estado Pendiente (si aplica)
-            try {
-                // Determinar nombre de columna repartidor y estado si existen
-                $repartidorCol = null; $estadoCol = null;
-                foreach ($cols2 as $c) { $low = strtolower($c); if (in_array($low, ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) $repartidorCol = $c; if (in_array($low, ['estado','estado_pedido','status'])) $estadoCol = $c; }
-
-                if ($repartidorCol !== null) {
-                    $upd = $pdo->prepare("UPDATE pedidos SET {$repartidorCol} = NULL WHERE {$idCol} = ?");
-                    $upd->execute([$orderId]);
-                }
-                if ($estadoCol !== null) {
-                    // determinar tipo de columna estado
-                    $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
-                    $colTypeStmt->execute([$dbname, $estadoCol]);
-                    $colType = $colTypeStmt->fetchColumn();
-                    $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
-                    $val = $isNumericEstado ? 0 : 'Pendiente';
-                    $upd2 = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$idCol} = ?");
-                    $upd2->execute([$val, $orderId]);
-                }
-            } catch (Exception $e) {
-                error_log('create_order: ensure defaults failed: ' . $e->getMessage());
-            }
-
-            // Recuperar el pedido insertado y sus items para incluir en la respuesta
-            try {
-                if ($idCol !== null) {
-                    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$idCol} = ? LIMIT 1");
-                    $stmt->execute([$orderId]);
-                    $pedidoRow = $stmt->fetch(PDO::FETCH_ASSOC);
-                } else { $pedidoRow = null; }
-            } catch (Exception $e) { $pedidoRow = null; }
-            try {
-                $stmtItems = $pdo->prepare("SELECT * FROM Platillos_Pedido WHERE {$itemIdCol} = ?");
-                $stmtItems->execute([$orderId]);
-                $itemsRow = $stmtItems->fetchAll(PDO::FETCH_ASSOC);
-            } catch (Exception $e) { $itemsRow = []; }
-
-            $response = ['success' => true, 'message' => 'Pedido creado', 'order_id' => $orderId, 'pedido' => $pedidoRow, 'items' => $itemsRow];
+            $response = ['success' => true, 'message' => 'Pedido creado', 'order_id' => $orderId];
             if ($assignedRepartidor !== null) $response['assigned_repartidor'] = $assignedRepartidor;
             echo json_encode($response);
         } catch (PDOException $e) {
@@ -754,92 +760,22 @@ try {
 
             // buscar columna estado
             $estadoCol = null;
-                    $excludeFinalWhere = '';
+            foreach ($cols as $c) { if (in_array(strtolower($c), ['estado','estado_pedido','status'])) { $estadoCol = $c; break; } }
 
-            // buscar columna de visibilidad/ocultar para repartidor (si existe)
-            $visibilityCol = null;
-            $possibleVisibility = ['ocultar_repartidor','ocultar_a_repartidor','ocultar_repartidores','hide_repartidor','hide_from_repartidor','oculto_repartidor'];
-            foreach ($cols as $c) {
-                if (in_array(strtolower($c), $possibleVisibility)) { $visibilityCol = $c; break; }
-            }
-            $visibilityWhere = '';
-            if ($visibilityCol !== null) {
-                $visibilityWhere = " AND ({$visibilityCol} IS NULL OR {$visibilityCol} = 0)";
-            }
-
-            // Permitir al cliente pedir también pedidos asignados (útil para debugging)
-            $includeAssigned = false;
-            if (isset($input_data['include_assigned'])) {
-                $inc = $input_data['include_assigned'];
-                $includeAssigned = ($inc === true || $inc === 1 || $inc === '1' || strtolower((string)$inc) === 'true');
-            }
-
-
-                    // buscar columna de visibilidad/ocultar para repartidor (si existe)
-                    $visibilityCol = null;
-                    $possibleVisibility = ['ocultar_repartidor','ocultar_a_repartidor','ocultar_repartidores','hide_repartidor','hide_from_repartidor','oculto_repartidor'];
-                    foreach ($cols as $c) {
-                        if (in_array(strtolower($c), $possibleVisibility)) { $visibilityCol = $c; break; }
-                    }
-                    $visibilityWhere = '';
-                    if ($visibilityCol !== null) {
-                        $visibilityWhere = " AND ({$visibilityCol} IS NULL OR {$visibilityCol} = 0)";
-                    }
-            // Construir where: preferimos mostrar pedidos sin repartidor, pero
-            // también aceptar filas cuya columna de estado represente 'pendiente'.
-            // Detectamos el tipo de la columna estado para aceptar valores numéricos (0/1)
-            // o textos ('Pendiente','Listo', etc.). Limite por defecto: 200.
-            // Mostrar TODOS los pedidos que aún no tienen repartidor.
-            // Excluir solo aquellos pedidos que están claramente finalizados (entregados/cancelados).
-            // Detectar si existe columna de estado y su tipo para excluir valores finales apropiadamente.
-            $excludeFinalWhere = '';
-            $isNumericEstado = false;
-            if ($estadoCol !== null) {
-                try {
-                    $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
-                    $colTypeStmt->execute([$dbname, $estadoCol]);
-                    $colType = $colTypeStmt->fetchColumn();
-                    $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
-                } catch (Exception $e) {
-                    $isNumericEstado = false;
-                }
-                if ($isNumericEstado) {
-                    // 3 suele representar "Entregado"/finalizado en este esquema.
-                    $excludeFinalWhere = " AND ({$estadoCol} IS NULL OR {$estadoCol} NOT IN (3))";
-                } else {
-                    $excludeFinalWhere = " AND ({$estadoCol} IS NULL OR {$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado'))";
-                }
-            }
-
-            if ($repartidorCol !== null && !$includeAssigned) {
-                // comportamiento por defecto: mostrar solo pedidos sin repartidor
-                $sql = "SELECT * FROM pedidos WHERE ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0) " . $excludeFinalWhere . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute();
-            } else if ($repartidorCol !== null && $includeAssigned) {
-                // incluir pedidos asignados tambien: solo aplicar filtros de estado/visibilidad
-                $sql = "SELECT * FROM pedidos WHERE 1=1 " . $excludeFinalWhere . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
+            // Construir where: si existe columna repartidor filtramos por IS NULL/0/''; si no existe, intentar usar estado
+            if ($repartidorCol !== null) {
+                $sql = "SELECT * FROM pedidos WHERE ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0) ORDER BY {$idCol} DESC LIMIT 200";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute();
             } else if ($estadoCol !== null) {
-                // Si no existe columna repartidor, mostrar pedidos cuyo estado no sea final
-                if ($isNumericEstado) {
-                    $sql = "SELECT * FROM pedidos WHERE ({$estadoCol} IS NULL OR {$estadoCol} NOT IN (3)) " . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
-                } else {
-                    $sql = "SELECT * FROM pedidos WHERE ({$estadoCol} IS NULL OR {$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado')) " . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
-                }
+                $sql = "SELECT * FROM pedidos WHERE {$estadoCol} IN ('Pendiente','pendiente', 'Listo', 'listo') ORDER BY {$idCol} DESC LIMIT 200";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute();
             } else {
-                $sql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 500";
-                if ($visibilityCol !== null) {
-                    // if visibility column exists prefer to exclude hidden ones
-                    $sql = "SELECT * FROM pedidos WHERE ({$visibilityCol} IS NULL OR {$visibilityCol} = 0) ORDER BY {$idCol} DESC LIMIT 500";
-                }
-                $stmt = $pdo->prepare($sql);
+                $stmt = $pdo->prepare("SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 200");
                 $stmt->execute();
             }
-                
+
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'orders' => $rows]);
         } catch (PDOException $e) {
@@ -885,12 +821,7 @@ try {
 
             if ($repartidorCol !== null) {
                 if ($targetRepId !== null) {
-                    // Respect visibility to repartidores if such column exists
-                    $visibilityCol = null;
-                    $possibleVisibility = ['ocultar_repartidor','ocultar_a_repartidor','ocultar_repartidores','hide_repartidor','hide_from_repartidor','oculto_repartidor'];
-                    foreach ($cols as $c) { if (in_array(strtolower($c), $possibleVisibility)) { $visibilityCol = $c; break; } }
-                    $visibilityWhereSql = $visibilityCol ? " AND ({$visibilityCol} IS NULL OR {$visibilityCol} = 0)" : '';
-                    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$repartidorCol} = ? " . $visibilityWhereSql . " ORDER BY {$idCol} DESC");
+                    $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$repartidorCol} = ? ORDER BY {$idCol} DESC");
                     $stmt->execute([$targetRepId]);
                 } else {
                     // No encontramos mapping; devolver vacío en lugar de intentar con el valor proporcionado
@@ -906,127 +837,6 @@ try {
             echo json_encode(['success' => true, 'orders' => $rows]);
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'message' => 'Error obteniendo pedidos asignados: ' . $e->getMessage()]);
-        }
-        exit;
-    }
-
-    // DEBUG: listar ultimos pedidos sin aplicar filtros (útil para inspección rápida)
-    if ($action === 'debug_list_orders') {
-        $limit = isset($input_data['limit']) ? intval($input_data['limit']) : 50;
-        if ($limit <= 0) $limit = 50;
-        try {
-            // Determinar la columna id real de la tabla pedidos
-            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
-            $colsStmt->execute([$dbname]);
-            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $idCol = null;
-            foreach ($cols as $c) {
-                $low = strtolower($c);
-                if ($low === 'id_pedido' || $low === 'idpedidos' || $low === 'id' || $low === 'id_pedidos') { $idCol = $c; break; }
-            }
-            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
-
-            $sql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT ?";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$limit]);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            echo json_encode(['success' => true, 'count' => count($rows), 'orders' => $rows]);
-        } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Error debug_list_orders: ' . $e->getMessage()]);
-        }
-        exit;
-    }
-
-    // DEBUG: evaluar por qué una fila concreta sería incluida/excluida por get_pending_orders
-    if ($action === 'debug_eval_order') {
-        $order_id = $input_data['order_id'] ?? null;
-        if (empty($order_id) && $order_id !== 0) { echo json_encode(['success' => false, 'message' => 'order_id requerido']); exit; }
-        try {
-            // Determinar columnas
-            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
-            $colsStmt->execute([$dbname]);
-            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $idCol = null; foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
-            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
-
-            $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$idCol} = ? LIMIT 1");
-            $stmt->execute([$order_id]);
-            $row = $stmt->fetch(PDO::FETCH_ASSOC);
-            if (!$row) { echo json_encode(['success' => false, 'message' => 'Pedido no encontrado']); exit; }
-
-            // Evaluar condiciones tal como hace get_pending_orders
-            $repartidorCol = null; $estadoCol = null; $visibilityCol = null;
-            $possibleVisibility = ['ocultar_repartidor','ocultar_a_repartidor','ocultar_repartidores','hide_repartidor','hide_from_repartidor','oculto_repartidor'];
-            foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) $repartidorCol = $c; if (in_array($low, ['estado','estado_pedido','status'])) $estadoCol = $c; if (in_array($low, $possibleVisibility)) $visibilityCol = $c; }
-
-            $reason = [];
-
-            // visibility
-            if ($visibilityCol !== null) {
-                $v = $row[$visibilityCol] ?? null;
-                if ($v !== null && (int)$v === 1) $reason[] = 'oculto_por_visibility';
-            }
-
-            // estado final?
-            if ($estadoCol !== null) {
-                $val = $row[$estadoCol] ?? null;
-                // intentar detectar tipo
-                $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
-                $colTypeStmt->execute([$dbname, $estadoCol]);
-                $colType = $colTypeStmt->fetchColumn();
-                $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
-                if ($isNumericEstado) {
-                    if ($val !== null && intval($val) === 3) $reason[] = 'estado_final_numeric_3';
-                } else {
-                    $low = strtolower((string)$val);
-                    if (in_array($low, ['entregado','cancelado'])) $reason[] = 'estado_final_text';
-                }
-            }
-
-            // repartidor asignado?
-            if ($repartidorCol !== null) {
-                $r = $row[$repartidorCol] ?? null;
-                if ($r !== null && $r !== '' && intval($r) !== 0) $reason[] = 'tiene_repartidor_asignado';
-            }
-
-            $included = empty($reason);
-            echo json_encode(['success' => true, 'order' => $row, 'included_by_get_pending_orders' => $included, 'exclusion_reasons' => $reason]);
-        } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Error debug_eval_order: ' . $e->getMessage()]);
-        }
-        exit;
-    }
-
-    // ----------------------- AJUSTAR VISIBILIDAD DE PEDIDO A REPARTIDORES -----------------------
-    if ($action === 'set_order_visibility') {
-        $order_id = $input_data['order_id'] ?? null;
-        if (empty($order_id) && $order_id !== 0) { echo json_encode(['success' => false, 'message' => 'order_id requerido']); exit; }
-        if (!isset($input_data['visible'])) { echo json_encode(['success' => false, 'message' => 'visible (0/1 o true/false) requerido']); exit; }
-        $visibleParam = $input_data['visible'];
-        // normalize boolean-like
-        $visible = ($visibleParam === true || $visibleParam === '1' || $visibleParam === 1 || $visibleParam === 'true' || $visibleParam === 't') ? 1 : 0;
-        try {
-            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
-            $colsStmt->execute([$dbname]);
-            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $visibilityCol = null;
-            $possibleVisibility = ['ocultar_repartidor','ocultar_a_repartidor','ocultar_repartidores','hide_repartidor','hide_from_repartidor','oculto_repartidor'];
-            foreach ($cols as $c) { if (in_array(strtolower($c), $possibleVisibility)) { $visibilityCol = $c; break; } }
-            if ($visibilityCol === null) { echo json_encode(['success' => false, 'message' => 'Tabla pedidos no tiene columna de visibilidad para repartidores']); exit; }
-
-            // determinar columna id
-            $idCol = null;
-            foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
-            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
-
-            // our visibility convention: 0 or NULL => visible to repartidor; 1 => hidden
-            $val = $visible ? 0 : 1; // client asks visible=1 -> store 0 (visible); visible=0 -> store 1 (hidden)
-            $upd = $pdo->prepare("UPDATE pedidos SET {$visibilityCol} = ? WHERE {$idCol} = ?");
-            $upd->execute([$val, $order_id]);
-            if ($upd->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Visibilidad actualizada']);
-            else echo json_encode(['success' => false, 'message' => 'No se actualizó la visibilidad (id inexistente o sin cambios)']);
-        } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Error set_order_visibility: ' . $e->getMessage()]);
         }
         exit;
     }
@@ -1077,106 +887,15 @@ try {
                 exit;
             }
 
-            // Ejecutar la actualización de forma atómica: solo asignar si aún no tiene repartidor
-            try {
-                // Registrar intento
-                error_log('assign_order: attempt order_id=' . $order_id . ' targetRep=' . $targetRepId);
-                // Obtener valor actual para información de debug
-                $chkPrev = $pdo->prepare("SELECT {$repartidorCol} AS current_rep FROM pedidos WHERE {$idCol} = ? LIMIT 1");
-                $chkPrev->execute([$order_id]);
-                $prevRow = $chkPrev->fetch(PDO::FETCH_ASSOC);
-                $prevRep = $prevRow ? ($prevRow['current_rep'] ?? null) : null;
-
-                $sql = "UPDATE pedidos SET {$repartidorCol} = ?";
-                $params = [$targetRepId];
-                if ($estadoCol !== null) { $sql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
-                // Solo actualizar si no tiene repartidor asignado (NULL, '', 0)
-                $sql .= " WHERE {$idCol} = ? AND ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0)";
-                $params[] = $order_id;
-
-                // Support dry-run for testing without modifying the DB
-                $dryRun = false;
-                if (isset($input_data['dry_run'])) {
-                    $d = $input_data['dry_run'];
-                    $dryRun = ($d === true || $d === 1 || $d === '1' || strtolower((string)$d) === 'true');
-                }
-
-                if ($dryRun) {
-                    // Return a simulated updated row without executing UPDATE
-                    try {
-                        $fetchIdCol = $idCol ?? null;
-                        if ($fetchIdCol !== null) {
-                            $getStmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$fetchIdCol} = ? LIMIT 1");
-                            $getStmt->execute([$order_id]);
-                            $row = $getStmt->fetch(PDO::FETCH_ASSOC);
-                        } else {
-                            $row = null;
-                        }
-                    } catch (PDOException $e) {
-                        $row = null;
-                    }
-                    if (!$row) {
-                        echo json_encode(['success' => false, 'message' => 'Pedido no encontrado (simulación)']);
-                    } else {
-                        // Simulate assignment
-                        $sim = $row;
-                        if ($repartidorCol !== null) $sim[$repartidorCol] = $targetRepId;
-                        if ($estadoCol !== null) {
-                            // detect numeric estado column like elsewhere
-                            try {
-                                $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
-                                $colTypeStmt->execute([$dbname, $estadoCol]);
-                                $colType = $colTypeStmt->fetchColumn();
-                                $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
-                            } catch (Exception $e) { $isNumericEstado = false; }
-                            $statusMap = ['Asignado' => 0, 'Pendiente' => 0, 'Listo' => 0, 'En Camino' => 1, 'EnCamino' => 1, 'Cerca' => 2, 'Entregado' => 3, 'Finalizado' => 3];
-                            if ($isNumericEstado) $sim[$estadoCol] = $statusMap['Asignado']; else $sim[$estadoCol] = 'Asignado';
-                        }
-                        echo json_encode(['success' => true, 'message' => 'Pedido asignado (simulado)', 'dry_run' => true, 'repartidor_used' => $targetRepId, 'order' => $sim]);
-                    }
-                } else {
-                    $stmt = $pdo->prepare($sql);
-                    $stmt->execute($params);
-                    if ($stmt->rowCount() > 0) {
-                    error_log('assign_order: success order_id=' . $order_id . ' assigned_to=' . $targetRepId);
-                    // Recuperar fila actualizada para devolver al cliente
-                    try {
-                        $fetchIdCol = $idCol ?? null;
-                        if ($fetchIdCol !== null) {
-                            $getStmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$fetchIdCol} = ? LIMIT 1");
-                            $getStmt->execute([$order_id]);
-                            $updatedRow = $getStmt->fetch(PDO::FETCH_ASSOC);
-                        } else {
-                            $updatedRow = null;
-                        }
-                    } catch (PDOException $e) {
-                        $updatedRow = null;
-                    }
-                    echo json_encode(['success' => true, 'message' => 'Pedido asignado', 'repartidor_used' => $targetRepId, 'order' => $updatedRow]);
-                } else {
-                    // No se pudo asignar: probablemente ya estaba asignado
-                    error_log('assign_order: conflict order_id=' . $order_id . ' prevRep=' . var_export($prevRep, true));
-                    $current = $prevRep;
-                    if ($current === null || $current === '' || intval($current) === 0) {
-                        echo json_encode(['success' => false, 'message' => 'No se actualizó el pedido (id inexistente o sin cambios)']);
-                    } else {
-                        // También devolver la fila actual para que el cliente pueda ver el repartidor actual
-                        $currentRow = null;
-                        try {
-                            $fetchIdCol = $idCol ?? null;
-                            if ($fetchIdCol !== null) {
-                                $g = $pdo->prepare("SELECT * FROM pedidos WHERE {$fetchIdCol} = ? LIMIT 1");
-                                $g->execute([$order_id]);
-                                $currentRow = $g->fetch(PDO::FETCH_ASSOC);
-                            }
-                        } catch (PDOException $e) { $currentRow = null; }
-                        echo json_encode(['success' => false, 'message' => 'Pedido ya asignado', 'current_repartidor' => $current, 'order' => $currentRow]);
-                    }
-                }
-            } catch (PDOException $e) {
-                error_log('assign_order: error executing atomic update: ' . $e->getMessage());
-                echo json_encode(['success' => false, 'message' => 'Error asignando pedido: ' . $e->getMessage()]);
-            }
+            // Ejecutar la actualización usando el ID_Repartidor real encontrado
+            $sql = "UPDATE pedidos SET {$repartidorCol} = ?";
+            $params = [$targetRepId];
+            if ($estadoCol !== null) { $sql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
+            $sql .= " WHERE {$idCol} = ?"; $params[] = $order_id;
+            $stmt = $pdo->prepare($sql);
+            $stmt->execute($params);
+            if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Pedido asignado', 'repartidor_used' => $targetRepId]);
+            else echo json_encode(['success' => false, 'message' => 'No se actualizó el pedido (id inexistente o sin cambios)']);
         } catch (PDOException $e) { echo json_encode(['success' => false, 'message' => 'Error asignando pedido: ' . $e->getMessage()]); }
         exit;
     }
@@ -1270,106 +989,81 @@ try {
                 }
             }
 
-            // Support dry-run mode to simulate status update without writing to DB
-            $dryRun = false;
-            if (isset($input_data['dry_run'])) {
-                $d = $input_data['dry_run'];
-                $dryRun = ($d === true || $d === 1 || $d === '1' || strtolower((string)$d) === 'true');
-            }
+            $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$usedIdCol} = ?");
+            $stmt->execute([$updateValue, $resolvedIdValue]);
+            if ($stmt->rowCount() > 0) {
+                echo json_encode(['success' => true, 'message' => 'Estado actualizado']);
 
-            if ($dryRun) {
-                // Fetch current row and simulate change
+                // After a status change, attempt to rebalance/assign repartidores automatically.
                 try {
-                    $getStmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
-                    $getStmt->execute([$resolvedIdValue]);
-                    $row = $getStmt->fetch(PDO::FETCH_ASSOC);
-                } catch (PDOException $e) { $row = null; }
-                if (!$row) {
-                    echo json_encode(['success' => false, 'message' => 'Pedido no encontrado (simulación)']);
-                } else {
-                    $sim = $row;
-                    $sim[$estadoCol] = $updateValue;
-                    echo json_encode(['success' => true, 'message' => 'Estado actualizado (simulado)', 'dry_run' => true, 'order' => $sim]);
-                }
-            } else {
-                $stmt = $pdo->prepare("UPDATE pedidos SET {$estadoCol} = ? WHERE {$usedIdCol} = ?");
-                $stmt->execute([$updateValue, $resolvedIdValue]);
-                if ($stmt->rowCount() > 0) {
-                    // Recuperar fila actualizada y devolverla para actualización inmediata en clientes
-                    try {
-                        $getStmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
-                        $getStmt->execute([$resolvedIdValue]);
-                        $updatedRow = $getStmt->fetch(PDO::FETCH_ASSOC);
-                    } catch (PDOException $e) { $updatedRow = null; }
-                    echo json_encode(['success' => true, 'message' => 'Estado actualizado', 'order' => $updatedRow]);
+                    // determine repartidor column if any
+                    $repartidorCol = null;
+                    foreach ($cols as $c) { if (in_array(strtolower($c), ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) { $repartidorCol = $c; break; } }
+                    if ($repartidorCol !== null) {
+                        // find repartidor assigned to this order (if any)
+                        $chkRep = $pdo->prepare("SELECT {$repartidorCol} AS rep FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
+                        $chkRep->execute([$resolvedIdValue]);
+                        $rowRep = $chkRep->fetch(PDO::FETCH_ASSOC);
+                        $repId = $rowRep ? ($rowRep['rep'] ?? null) : null;
+                        if ($repId) {
+                            // count active orders for this repartidor
+                            $cntSql = "SELECT COUNT(*) AS cnt FROM pedidos WHERE {$repartidorCol} = ?";
+                            if ($estadoCol !== null) $cntSql .= " AND ({$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado'))";
+                            $cntStmt = $pdo->prepare($cntSql);
+                            $cntStmt->execute([$repId]);
+                            $cntRow = $cntStmt->fetch(PDO::FETCH_ASSOC);
+                            $assignedCount = intval($cntRow['cnt'] ?? 0);
 
-                    // After a status change: previously the system enforced a per-repartidor cap
-                    // (3) and attempted to auto-assign pending orders to reach that cap. That
-                    // behavior is disabled: do not enforce limits or auto-reassign here.
-                    try {
-                        // no-op: limit enforcement and auto-reassign disabled
-                    } catch (PDOException $e) {
-                        error_log('update_order_status: repartidor reassign skipped/disabled: ' . $e->getMessage());
+                            // if below limit, mark repartidor available
+                            if ($assignedCount < 3) {
+                                $updRep = $pdo->prepare("UPDATE repartidor SET Estado_Repartidor = 1 WHERE ID_Repartidor = ?");
+                                $updRep->execute([$repId]);
+                            }
+
+                            // assign pending orders to this repartidor until reaching limit
+                            $slots = 3 - $assignedCount;
+                            if ($slots > 0) {
+                                // select pending orders without repartidor
+                                $pendingWhere = "({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0)";
+                                $selSql = "SELECT * FROM pedidos WHERE {$pendingWhere} ORDER BY {$usedIdCol} ASC LIMIT ? FOR UPDATE";
+                                $selStmt = $pdo->prepare($selSql);
+                                $selStmt->execute([$slots]);
+                                $pending = $selStmt->fetchAll(PDO::FETCH_ASSOC);
+                                foreach ($pending as $p) {
+                                    $updSql = "UPDATE pedidos SET {$repartidorCol} = ?";
+                                    $params = [$repId];
+                                    if ($estadoCol !== null) { $updSql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
+                                    $updSql .= " WHERE {$usedIdCol} = ?"; $params[] = $p[$usedIdCol];
+                                    $u = $pdo->prepare($updSql);
+                                    $u->execute($params);
+                                    $assignedCount++;
+                                    if ($assignedCount >= 3) break;
+                                }
+                                // if reached limit, mark repartidor unavailable
+                                if ($assignedCount >= 3) {
+                                    $updRep2 = $pdo->prepare("UPDATE repartidor SET Estado_Repartidor = 0 WHERE ID_Repartidor = ?");
+                                    $updRep2->execute([$repId]);
+                                }
+                            }
+                        }
                     }
+                } catch (PDOException $e) {
+                    error_log('update_order_status: repartidor reassign failed: ' . $e->getMessage());
+                }
 
-                } else {
-                // No rows affected: fetch current status to provide a clearer reason,
-                // but be tolerant when comparing textual/numeric representations.
+            } else {
+                // No rows affected: fetch current status to provide a clearer reason
                 try {
                     $chk = $pdo->prepare("SELECT {$estadoCol} AS current_status FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
                     $chk->execute([$resolvedIdValue]);
                     $row = $chk->fetch(PDO::FETCH_ASSOC);
                     $current = $row ? ($row['current_status'] ?? null) : null;
                     $current_label = null;
-
-                    // Build case-insensitive map for textual status mapping
-                    $statusMapLower = [];
-                    foreach ($statusMap as $k => $v) { $statusMapLower[strtolower($k)] = $v; }
-                    $reverseMap = array_flip($statusMap); // value => label
-
                     if ($isNumericEstado && $current !== null) {
-                        $intCur = intval($current);
-                        if (isset($reverseMap[$intCur])) $current_label = $reverseMap[$intCur];
-                    } else if (!$isNumericEstado && $current !== null) {
-                        $current_label = (string)$current;
+                        $rev = array_search(intval($current), $statusMap, true);
+                        if ($rev !== false) $current_label = $rev;
                     }
-
-                    // Determine normalized requested value and normalized current value
-                    $equal = false;
-                    if ($isNumericEstado) {
-                        if (!is_numeric($updateValue)) {
-                            $lowerStatus = strtolower(trim((string)$status));
-                            if (isset($statusMapLower[$lowerStatus])) $requestedValue = $statusMapLower[$lowerStatus];
-                            else $requestedValue = (int)preg_replace('/[^0-9]/', '', (string)$status);
-                        } else {
-                            $requestedValue = intval($updateValue);
-                        }
-                        $currentNorm = ($current !== null) ? intval($current) : null;
-                        $equal = ($currentNorm !== null && $currentNorm === $requestedValue);
-                    } else {
-                        $currentNorm = ($current !== null) ? strtolower(trim((string)$current)) : null;
-                        $requestedNorm = strtolower(trim((string)$status));
-                        $equal = ($currentNorm !== null && $currentNorm === $requestedNorm);
-                        $requestedValue = $requestedNorm;
-                    }
-
-                    if ($equal) {
-                        // devolver la fila actual para sincronización en el cliente
-                        try {
-                            $getStmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
-                            $getStmt->execute([$resolvedIdValue]);
-                            $updatedRow = $getStmt->fetch(PDO::FETCH_ASSOC);
-                        } catch (PDOException $e) { $updatedRow = null; }
-                        echo json_encode(['success' => true, 'message' => 'Estado ya establecido', 'current_status' => $current, 'current_status_label' => $current_label, 'order' => $updatedRow]);
-                    } else {
-                        // Return clearer debug info to help clients understand mismatch and include current row
-                        try {
-                            $getStmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$usedIdCol} = ? LIMIT 1");
-                            $getStmt->execute([$resolvedIdValue]);
-                            $updatedRow = $getStmt->fetch(PDO::FETCH_ASSOC);
-                        } catch (PDOException $e) { $updatedRow = null; }
-                        echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero sin cambios)', 'current_status' => $current, 'current_status_label' => $current_label, 'requested_raw' => $status, 'requested_mapped' => $requestedValue, 'order' => $updatedRow]);
-                    }
+                    echo json_encode(['success' => false, 'message' => 'No se actualizó (id existente pero mismo estado o sin cambios)', 'current_status' => $current, 'current_status_label' => $current_label]);
                 } catch (PDOException $e) {
                     echo json_encode(['success' => false, 'message' => 'No se actualizó (sin cambios)']);
                 }
@@ -1405,44 +1099,17 @@ try {
                     $estadoCol = null;
                     foreach ($cols as $c) { if (in_array(strtolower($c), ['estado','estado_pedido','status'])) { $estadoCol = $c; break; } }
 
-                    // Mostrar TODOS los pedidos que aún no tienen repartidor.
-                    // Excluir solo aquellos pedidos que están claramente finalizados (entregados/cancelados).
-                    $excludeFinalWhere = '';
-                    $isNumericEstado = false;
-                    if ($estadoCol !== null) {
-                        try {
-                            $colTypeStmt = $pdo->prepare("SELECT DATA_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos' AND COLUMN_NAME = ? LIMIT 1");
-                            $colTypeStmt->execute([$dbname, $estadoCol]);
-                            $colType = $colTypeStmt->fetchColumn();
-                            $isNumericEstado = in_array(strtolower($colType), ['int','tinyint','smallint','bigint','mediumint']);
-                        } catch (Exception $e) {
-                            $isNumericEstado = false;
-                        }
-                        if ($isNumericEstado) {
-                            $excludeFinalWhere = " AND ({$estadoCol} IS NULL OR {$estadoCol} NOT IN (3))";
-                        } else {
-                            $excludeFinalWhere = " AND ({$estadoCol} IS NULL OR {$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado'))";
-                        }
-                    }
-
+                    // Construir where: si existe columna repartidor filtramos por IS NULL/0/''; si no existe, intentar usar estado
                     if ($repartidorCol !== null) {
-                        $sql = "SELECT * FROM pedidos WHERE ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0) " . $excludeFinalWhere . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
+                        $sql = "SELECT * FROM pedidos WHERE ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0) ORDER BY {$idCol} DESC LIMIT 200";
                         $stmt = $pdo->prepare($sql);
                         $stmt->execute();
                     } else if ($estadoCol !== null) {
-                        if ($isNumericEstado) {
-                            $sql = "SELECT * FROM pedidos WHERE ({$estadoCol} IS NULL OR {$estadoCol} NOT IN (3)) " . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
-                        } else {
-                            $sql = "SELECT * FROM pedidos WHERE ({$estadoCol} IS NULL OR {$estadoCol} NOT IN ('Entregado','entregado','Cancelado','cancelado')) " . $visibilityWhere . " ORDER BY {$idCol} DESC LIMIT 500";
-                        }
+                        $sql = "SELECT * FROM pedidos WHERE {$estadoCol} IN ('Pendiente','pendiente', 'Listo', 'listo') ORDER BY {$idCol} DESC LIMIT 200";
                         $stmt = $pdo->prepare($sql);
                         $stmt->execute();
                     } else {
-                        $sql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 500";
-                        if ($visibilityCol !== null) {
-                            $sql = "SELECT * FROM pedidos WHERE ({$visibilityCol} IS NULL OR {$visibilityCol} = 0) ORDER BY {$idCol} DESC LIMIT 500";
-                        }
-                        $stmt = $pdo->prepare($sql);
+                        $stmt = $pdo->prepare("SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 200");
                         $stmt->execute();
                     }
 
@@ -1471,12 +1138,7 @@ try {
                     foreach ($cols as $c) { if (in_array(strtolower($c), ['id_repartidor','idrepartidor','repartidor_id','id_repartidores'])) { $repartidorCol = $c; break; } }
 
                     if ($repartidorCol !== null) {
-                        // Respect visibility to repartidores if such column exists
-                        $visibilityCol = null;
-                        $possibleVisibility = ['ocultar_repartidor','ocultar_a_repartidor','ocultar_repartidores','hide_repartidor','hide_from_repartidor','oculto_repartidor'];
-                        foreach ($cols as $c) { if (in_array(strtolower($c), $possibleVisibility)) { $visibilityCol = $c; break; } }
-                        $visibilityWhereSql = $visibilityCol ? " AND ({$visibilityCol} IS NULL OR {$visibilityCol} = 0)" : '';
-                        $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$repartidorCol} = ? " . $visibilityWhereSql . " ORDER BY {$idCol} DESC");
+                        $stmt = $pdo->prepare("SELECT * FROM pedidos WHERE {$repartidorCol} = ? ORDER BY {$idCol} DESC");
                         $stmt->execute([$repartidor_id]);
                     } else {
                         // Si no hay columna repartidor, devolver vacio (no podemos filtrar)
@@ -1537,41 +1199,15 @@ try {
                         exit;
                     }
 
-                    // Ejecutar la actualización de forma atómica: solo asignar si aún no tiene repartidor
-                    try {
-                        // Registrar intento
-                        error_log('assign_order: attempt order_id=' . $order_id . ' targetRep=' . $targetRepId);
-                        // Obtener valor actual para información de debug
-                        $chkPrev = $pdo->prepare("SELECT {$repartidorCol} AS current_rep FROM pedidos WHERE {$idCol} = ? LIMIT 1");
-                        $chkPrev->execute([$order_id]);
-                        $prevRow = $chkPrev->fetch(PDO::FETCH_ASSOC);
-                        $prevRep = $prevRow ? ($prevRow['current_rep'] ?? null) : null;
-
-                        $sql = "UPDATE pedidos SET {$repartidorCol} = ?";
-                        $params = [$targetRepId];
-                        if ($estadoCol !== null) { $sql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
-                        // Solo actualizar si no tiene repartidor asignado (NULL, '', 0)
-                        $sql .= " WHERE {$idCol} = ? AND ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0)";
-                        $params[] = $order_id;
-                        $stmt = $pdo->prepare($sql);
-                        $stmt->execute($params);
-                        if ($stmt->rowCount() > 0) {
-                            error_log('assign_order: success order_id=' . $order_id . ' assigned_to=' . $targetRepId);
-                            echo json_encode(['success' => true, 'message' => 'Pedido asignado', 'repartidor_used' => $targetRepId]);
-                        } else {
-                            // No se pudo asignar: probablemente ya estaba asignado
-                            error_log('assign_order: conflict order_id=' . $order_id . ' prevRep=' . var_export($prevRep, true));
-                            $current = $prevRep;
-                            if ($current === null || $current === '' || intval($current) === 0) {
-                                echo json_encode(['success' => false, 'message' => 'No se actualizó el pedido (id inexistente o sin cambios)']);
-                            } else {
-                                echo json_encode(['success' => false, 'message' => 'Pedido ya asignado', 'current_repartidor' => $current]);
-                            }
-                        }
-                    } catch (PDOException $e) {
-                        error_log('assign_order: error executing atomic update: ' . $e->getMessage());
-                        echo json_encode(['success' => false, 'message' => 'Error asignando pedido: ' . $e->getMessage()]);
-                    }
+                    // Ejecutar la actualización usando el ID_Repartidor real encontrado
+                    $sql = "UPDATE pedidos SET {$repartidorCol} = ?";
+                    $params = [$targetRepId];
+                    if ($estadoCol !== null) { $sql .= ", {$estadoCol} = ?"; $params[] = 'Asignado'; }
+                    $sql .= " WHERE {$idCol} = ?"; $params[] = $order_id;
+                    $stmt = $pdo->prepare($sql);
+                    $stmt->execute($params);
+                    if ($stmt->rowCount() > 0) echo json_encode(['success' => true, 'message' => 'Pedido asignado', 'repartidor_used' => $targetRepId]);
+                    else echo json_encode(['success' => false, 'message' => 'No se actualizó el pedido (id inexistente o sin cambios)']);
                 } catch (PDOException $e) { echo json_encode(['success' => false, 'message' => 'Error asignando pedido: ' . $e->getMessage()]); }
                 exit;
             }
@@ -1716,97 +1352,6 @@ try {
         exit;
     }
 
-    // ----------------------- ADMIN: LISTAR TODOS LOS PEDIDOS (HISTORIAL) -----------------------
-    if ($action === 'get_all_orders') {
-        try {
-            $limit = isset($input_data['limit']) ? intval($input_data['limit']) : 1000;
-            $offset = isset($input_data['offset']) ? intval($input_data['offset']) : 0;
-            if ($limit <= 0) $limit = 1000;
-
-            // Determinar columna id
-            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
-            $colsStmt->execute([$dbname]);
-            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $idCol = null;
-            foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
-            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
-
-            $sql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT ? OFFSET ?";
-            $stmt = $pdo->prepare($sql);
-            $stmt->execute([$limit, $offset]);
-            $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
-            echo json_encode(['success' => true, 'count' => count($rows), 'orders' => $rows]);
-        } catch (PDOException $e) {
-            echo json_encode(['success' => false, 'message' => 'Error get_all_orders: ' . $e->getMessage()]);
-        }
-        exit;
-    }
-
-    // ----------------------- ADMIN: ELIMINAR PEDIDOS (SINGLE O MULTI) -----------------------
-    if ($action === 'delete_orders') {
-        // Accept either single order_id or array order_ids
-        $ids = [];
-        if (isset($input_data['order_id'])) {
-            $ids[] = $input_data['order_id'];
-        }
-        if (isset($input_data['order_ids']) && is_array($input_data['order_ids'])) {
-            foreach ($input_data['order_ids'] as $v) $ids[] = $v;
-        }
-        if (empty($ids)) { echo json_encode(['success' => false, 'message' => 'order_id o order_ids requerido']); exit; }
-
-        // Seguridad: requerir admin_key para operaciones destructivas
-        $providedKey = $input_data['admin_key'] ?? $input_data['adminKey'] ?? '';
-        if (empty($providedKey) || $providedKey !== $ADMIN_DELETE_KEY) {
-            echo json_encode(['success' => false, 'message' => 'admin_key requerido o inválido']);
-            exit;
-        }
-
-        try {
-            $pdo->beginTransaction();
-
-            // Determinar columna id en pedidos
-            $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
-            $colsStmt->execute([$dbname]);
-            $cols = $colsStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $idCol = null; foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
-            if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
-
-            // Determinar FK columna en Platillos_Pedido
-            $colsItemStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'Platillos_Pedido'");
-            $colsItemStmt->execute([$dbname]);
-            $itemCols = $colsItemStmt->fetchAll(PDO::FETCH_COLUMN, 0);
-            $itemIdCol = null;
-            foreach ($itemCols as $c) { if (strtolower($c) === 'id_pedido') { $itemIdCol = $c; break; } }
-            if ($itemIdCol === null) {
-                foreach ($itemCols as $c) { if (strpos(strtolower($c), 'pedido') !== false) { $itemIdCol = $c; break; } }
-            }
-            if ($itemIdCol === null) $itemIdCol = 'ID_Pedido';
-
-            $deleted = 0;
-            foreach ($ids as $rawId) {
-                $orderId = $rawId;
-                // Delete items first if table exists
-                try {
-                    $delItems = $pdo->prepare("DELETE FROM Platillos_Pedido WHERE {$itemIdCol} = ?");
-                    $delItems->execute([$orderId]);
-                } catch (PDOException $e) {
-                    // ignore if table missing, but continue
-                }
-                // Delete order
-                $del = $pdo->prepare("DELETE FROM pedidos WHERE {$idCol} = ?");
-                $del->execute([$orderId]);
-                $deleted += $del->rowCount();
-            }
-
-            $pdo->commit();
-            echo json_encode(['success' => true, 'message' => 'Pedidos eliminados', 'deleted' => $deleted]);
-        } catch (PDOException $e) {
-            if ($pdo->inTransaction()) $pdo->rollBack();
-            echo json_encode(['success' => false, 'message' => 'Error delete_orders: ' . $e->getMessage()]);
-        }
-        exit;
-    }
-
     if ($action === 'update_restaurante') {
         $id = $input_data['id'] ?? '';
         $nombre = $input_data['nombre'] ?? '';
@@ -1860,11 +1405,9 @@ try {
     }
 
     // ----------------------- LOGIN TRADICIONAL -----------------------
-    if ($action === 'login') {
+    if ($action === 'login' || $action === null) {
         $email = $input_data['email'] ?? '';
         $password = $input_data['password'] ?? '';
-        // Log ligero para depuración si intentan hacer login por accidente
-        error_log('Login branch invoked. action=' . var_export($action, true) . ' input_preview=' . substr(json_encode(is_array($input_data) ? $input_data : []), 0, 300));
         if (empty($email) || empty($password)) { echo json_encode(['success' => false, 'message' => 'Email y contraseña requeridos']); exit; }
         $stmt = $pdo->prepare("SELECT * FROM usuarios WHERE Correo = ? AND (Contrasena = ? OR Contrasena = ?) AND activo = 1");
         $stmt->execute([$email, $password, md5($password)]);
@@ -1896,11 +1439,8 @@ try {
         exit;
     }
 
-    // Si ninguna acción coincide -> devolver información útil para debug
-    // No dejar datos sensibles por mucho tiempo en producción; esto es para depuración local.
-    error_log('Acción no reconocida. action=' . var_export($action, true) . ' input_preview=' . substr(json_encode($input_data), 0, 400));
-    $input_preview = substr(json_encode($input_data), 0, 400);
-    echo json_encode(['success' => false, 'message' => 'Acción no reconocida', 'action_received' => $action, 'input_preview' => $input_preview]);
+    // Si ninguna acción coincide
+    echo json_encode(['success' => false, 'message' => 'Acción no reconocida']);
 
 } catch (PDOException $e) {
     echo json_encode(['success' => false, 'message' => 'Error de conexión: ' . $e->getMessage()]);
