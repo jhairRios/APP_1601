@@ -856,23 +856,49 @@ try {
             $estadoCol = null;
             foreach ($cols as $c) { if (in_array(strtolower($c), ['estado','estado_pedido','status'])) { $estadoCol = $c; break; } }
 
-            // Construir where: preferimos filtrar por estado (Pendiente/Listo) para mostrar
-            // los pedidos en la vista de empleados incluso si ya están asignados a un repartidor.
-            if ($estadoCol !== null) {
-                $sql = "SELECT * FROM pedidos WHERE {$estadoCol} IN ('Pendiente','pendiente', 'Listo', 'listo') ORDER BY {$idCol} DESC LIMIT 200";
-                $stmt = $pdo->prepare($sql);
-                $stmt->execute();
-            } else if ($repartidorCol !== null) {
-                // Fallback: si no existe columna de estado, mostrar pedidos sin repartidor
+            // Construir where: preferimos mostrar pedidos SIN repartidor asignado
+            // porque son los que el repartidor puede tomar. Si no existe columna
+            // de repartidor, entonces caemos a filtrar por estado textual.
+            $sql = null;
+            if ($repartidorCol !== null) {
                 $sql = "SELECT * FROM pedidos WHERE ({$repartidorCol} IS NULL OR {$repartidorCol} = '' OR {$repartidorCol} = 0) ORDER BY {$idCol} DESC LIMIT 200";
                 $stmt = $pdo->prepare($sql);
                 $stmt->execute();
+            } else if ($estadoCol !== null) {
+                // Si no hay columna repartidor, filtrar por estados "Pendiente/Listo"
+                $sql = "SELECT * FROM pedidos WHERE {$estadoCol} IN ('Pendiente','pendiente', 'Listo', 'listo') ORDER BY {$idCol} DESC LIMIT 200";
+                $stmt = $pdo->prepare($sql);
+                $stmt->execute();
             } else {
-                $stmt = $pdo->prepare("SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 200");
+                $sql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 200";
+                $stmt = $pdo->prepare($sql);
                 $stmt->execute();
             }
 
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
+            // Log para diagnóstico: consulta utilizada y número de filas
+            if (isset($sql)) error_log('get_pending_orders SQL: ' . $sql);
+            error_log('get_pending_orders: found rows=' . count($rows));
+
+            // Si la consulta por estado/repartidor devuelve vacío pero existen filas
+            // en la tabla, devolver un fallback con todas las filas para ayudar a
+            // diagnosticar diferencias de esquema/valores en la DB.
+            if (empty($rows)) {
+                try {
+                    $fbSql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT 200";
+                    $fbStmt = $pdo->prepare($fbSql);
+                    $fbStmt->execute();
+                    $fbRows = $fbStmt->fetchAll(PDO::FETCH_ASSOC);
+                    if (!empty($fbRows)) {
+                        error_log('get_pending_orders: fallback returned ' . count($fbRows) . ' rows');
+                        echo json_encode(['success' => true, 'orders' => $fbRows, 'debug' => 'fallback_all_rows', 'debug_sql' => $fbSql]);
+                        exit;
+                    }
+                } catch (PDOException $e) {
+                    error_log('get_pending_orders: fallback error: ' . $e->getMessage());
+                }
+            }
+
             echo json_encode(['success' => true, 'orders' => $rows]);
         } catch (PDOException $e) {
             echo json_encode(['success' => false, 'message' => 'Error obteniendo pedidos pendientes: ' . $e->getMessage()]);

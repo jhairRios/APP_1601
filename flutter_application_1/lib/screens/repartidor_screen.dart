@@ -29,7 +29,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
   String? _pendingRawResponse;
   String? _currentRepartidorId;
   late StreamSubscription<Map<String, dynamic>> _orderSubscription;
-  Timer? _pollTimer;
+  // Timer de polling removido: recarga será manual mediante botón
 
   @override
   Widget build(BuildContext context) {
@@ -406,9 +406,8 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
       _orderSubscription = OrderService.orderStream.listen((order) {
         try {
           debugPrint('[repartidor] received order notify -> ${order.toString()}');
-          // Forzar recarga para reflejar nuevos pedidos creados por clientes
-          _loadPendingOrders();
-          _loadMyOrders();
+          // Mostrar notificación local pero NO forzar recarga automática
+          // para que el repartidor controle cuándo refrescar.
           WidgetsBinding.instance.addPostFrameCallback((_) {
             if (!mounted) return;
             try {
@@ -426,14 +425,8 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     }
 
     // Iniciar polling periódico para asegurarnos de recibir pedidos cuando
-    // la notificación local no aplique (por ejemplo multi-dispositivo).
-    try {
-      _pollTimer = Timer.periodic(const Duration(seconds: 5), (_) {
-        _loadPendingOrders();
-      });
-    } catch (e) {
-      debugPrint('[repartidor] poll timer failed: $e');
-    }
+    // La recarga automática por timer ha sido desactivada. El usuario
+    // debe pulsar el botón "Refrescar" para actualizar la lista.
   }
 
   @override
@@ -441,9 +434,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     try {
       _orderSubscription.cancel();
     } catch (_) {}
-    try {
-      _pollTimer?.cancel();
-    } catch (_) {}
+    // No hay timer que cancelar
     super.dispose();
   }
 
@@ -473,24 +464,35 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
                   color: colorPrimario,
                 ),
               ),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 12,
-                  vertical: 6,
-                ),
-                decoration: BoxDecoration(
-                  color: colorNaranja.withOpacity(0.1),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: colorNaranja.withOpacity(0.3)),
-                ),
-                child: Text(
-                  '${_pendingOrders.length} disponibles',
-                  style: TextStyle(
-                    color: colorNaranja,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w600,
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 6,
+                    ),
+                    decoration: BoxDecoration(
+                      color: colorNaranja.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: colorNaranja.withOpacity(0.3)),
+                    ),
+                    child: Text(
+                      '${_pendingOrders.length} disponibles',
+                      style: TextStyle(
+                        color: colorNaranja,
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
                   ),
-                ),
+                  const SizedBox(width: 8),
+                  // Botón de recarga manual
+                  IconButton(
+                    tooltip: 'Refrescar pedidos',
+                    onPressed: _loadPendingOrders,
+                    icon: Icon(Icons.refresh, color: colorPrimario),
+                  ),
+                ],
               ),
             ],
           ),
