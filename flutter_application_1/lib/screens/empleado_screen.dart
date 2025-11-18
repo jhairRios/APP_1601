@@ -3012,20 +3012,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               ],
             ),
           ),
-          ElevatedButton.icon(
-            onPressed: () {
-              // Asignar repartidor
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: colorAzul,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-            ),
-            icon: const Icon(Icons.assignment_ind, size: 16),
-            label: const Text('Asignar'),
-          ),
+          const SizedBox.shrink(),
         ],
       ),
     );
