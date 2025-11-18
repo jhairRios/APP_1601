@@ -222,13 +222,27 @@ class _ClienteScreenState extends State<ClienteScreen>
     // escuchar cambios de pedidos vía broadcast (empleados actualizando status)
     _orderSubscription = OrderService.orderStream.listen((order) {
       try {
-        final oid = (order['order_id'] ?? order['ID_Pedido'] ?? order['id'] ?? '').toString();
-        final newStatus = (order['status'] ?? order['Estado_Pedido'] ?? order['estado'] ?? order['status_label'] ?? '').toString();
+        final oid =
+            (order['order_id'] ?? order['ID_Pedido'] ?? order['id'] ?? '')
+                .toString();
+        final newStatus =
+            (order['status'] ??
+                    order['Estado_Pedido'] ??
+                    order['estado'] ??
+                    order['status_label'] ??
+                    '')
+                .toString();
         if (oid.isEmpty || newStatus.isEmpty) return;
         if (_myOrders == null) return;
         bool changed = false;
         for (final entry in _myOrders!) {
-          final eOrderId = (entry['order_id'] ?? entry['pedido']?['ID_Pedido'] ?? entry['pedido']?['Id_Pedido'] ?? entry['pedido']?['id'] ?? '').toString();
+          final eOrderId =
+              (entry['order_id'] ??
+                      entry['pedido']?['ID_Pedido'] ??
+                      entry['pedido']?['Id_Pedido'] ??
+                      entry['pedido']?['id'] ??
+                      '')
+                  .toString();
           if (eOrderId == oid) {
             entry['pedido'] ??= {};
             entry['pedido']['Estado_Pedido'] = newStatus;
@@ -432,7 +446,7 @@ class _ClienteScreenState extends State<ClienteScreen>
             'id': idVal != null ? idVal.toString() : '',
             'nombre': r['Nombre'] ?? r['nombre'] ?? '',
             'direccion': r['Direccion'] ?? r['direccion'] ?? '',
-            'logo': logoVal.isEmpty ? 'assets/LogoPinequitas.png' : logoVal,
+            'logo': logoVal.isEmpty ? 'assets/Pedidos.png' : logoVal,
             'telefono': r['Telefono'] ?? r['telefono'] ?? '',
             'correo': r['Correo'] ?? r['correo'] ?? '',
           };
@@ -472,30 +486,13 @@ class _ClienteScreenState extends State<ClienteScreen>
         foregroundColor: Colors.white,
         title: Row(
           children: [
-            // Logo circular con borde elegante
-            Container(
+            // Logo: mostrar la imagen tal cual (sin recorte circular)
+            SizedBox(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: FlexibleImage(
-                  source: 'assets/LogoPinequitas.png',
-                  fit: BoxFit.cover,
-                ),
+              child: FlexibleImage(
+                source: 'assets/Pedidos.png',
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 12),
@@ -1407,7 +1404,9 @@ class _ClienteScreenState extends State<ClienteScreen>
                                     // Debug: log server response for create_order
                                     try {
                                       // ignore: avoid_print
-                                      print('[cliente] create_order: status=${resp.statusCode} body=${resp.body}');
+                                      print(
+                                        '[cliente] create_order: status=${resp.statusCode} body=${resp.body}',
+                                      );
                                     } catch (_) {}
                                     if (decoded != null &&
                                         decoded['success'] == true) {
@@ -1448,11 +1447,13 @@ class _ClienteScreenState extends State<ClienteScreen>
                                       // pueda ver su pedido en "Mis Pedidos" aunque no esté logueado.
                                       try {
                                         if (orderId != null) {
-                                            try {
-                                              // Debug: confirm order id returned
-                                              // ignore: avoid_print
-                                              print('[cliente] create_order: order_id=${orderId}');
-                                            } catch (_) {}
+                                          try {
+                                            // Debug: confirm order id returned
+                                            // ignore: avoid_print
+                                            print(
+                                              '[cliente] create_order: order_id=${orderId}',
+                                            );
+                                          } catch (_) {}
                                           final prefs =
                                               await SharedPreferences.getInstance();
                                           final key = 'my_order_ids';
@@ -1471,7 +1472,9 @@ class _ClienteScreenState extends State<ClienteScreen>
                                           // doesn't return details (offline or race conditions).
                                           try {
                                             final cacheKey = 'my_orders_cache';
-                                            final cache = prefs.getStringList(cacheKey) ?? [];
+                                            final cache =
+                                                prefs.getStringList(cacheKey) ??
+                                                [];
                                             // Build a small summary object
                                             final summary = {
                                               'order_id': sid,
@@ -1479,16 +1482,28 @@ class _ClienteScreenState extends State<ClienteScreen>
                                               'total': confirmedTotal,
                                               'ubicacion': confirmedUbicacion,
                                               'telefono': confirmedTelefono,
-                                              'timestamp': DateTime.now().toIso8601String(),
+                                              'timestamp': DateTime.now()
+                                                  .toIso8601String(),
                                             };
                                             cache.removeWhere((s) {
                                               try {
                                                 final m = json.decode(s);
-                                                return m != null && (m['order_id']?.toString() == sid);
-                                              } catch (_) { return false; }
+                                                return m != null &&
+                                                    (m['order_id']
+                                                            ?.toString() ==
+                                                        sid);
+                                              } catch (_) {
+                                                return false;
+                                              }
                                             });
-                                            cache.insert(0, json.encode(summary));
-                                            await prefs.setStringList(cacheKey, cache);
+                                            cache.insert(
+                                              0,
+                                              json.encode(summary),
+                                            );
+                                            await prefs.setStringList(
+                                              cacheKey,
+                                              cache,
+                                            );
                                           } catch (_) {}
 
                                           // refrescar vista de pedidos
@@ -1497,8 +1512,17 @@ class _ClienteScreenState extends State<ClienteScreen>
                                       } catch (_) {}
                                       // Notificar a la app (empleado/admin) sobre el nuevo pedido
                                       try {
-                                        final prefsNotify = await SharedPreferences.getInstance();
-                                        final customerName = prefsNotify.getString('user_name') ?? prefsNotify.getString('saved_email') ?? prefsNotify.getString('user_id') ?? 'Cliente';
+                                        final prefsNotify =
+                                            await SharedPreferences.getInstance();
+                                        final customerName =
+                                            prefsNotify.getString(
+                                              'user_name',
+                                            ) ??
+                                            prefsNotify.getString(
+                                              'saved_email',
+                                            ) ??
+                                            prefsNotify.getString('user_id') ??
+                                            'Cliente';
                                         final notifyPayload = {
                                           'order_id': orderId,
                                           'customer': customerName,
@@ -1511,8 +1535,12 @@ class _ClienteScreenState extends State<ClienteScreen>
                                         };
                                         // Debug print antes de notificar
                                         // ignore: avoid_print
-                                        print('cliente: notify new order -> ${notifyPayload.toString()}');
-                                        OrderService.notifyNewOrder(notifyPayload);
+                                        print(
+                                          'cliente: notify new order -> ${notifyPayload.toString()}',
+                                        );
+                                        OrderService.notifyNewOrder(
+                                          notifyPayload,
+                                        );
                                       } catch (_) {}
                                     } else {
                                       final msg =
@@ -2218,7 +2246,12 @@ class _ClienteScreenState extends State<ClienteScreen>
     Color colorNaranja,
   ) {
     final steps = ['Confirmado', 'Preparando', 'En Camino', 'Entregado'];
-    final icons = [Icons.check_circle_outline, Icons.kitchen, Icons.local_shipping, Icons.home];
+    final icons = [
+      Icons.check_circle_outline,
+      Icons.kitchen,
+      Icons.local_shipping,
+      Icons.home,
+    ];
     final currentStep = steps.indexOf(status);
 
     return Row(

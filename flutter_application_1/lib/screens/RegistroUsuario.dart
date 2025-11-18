@@ -28,7 +28,7 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
   bool _emailFocused = false;
   bool _passwordFocused = false;
   bool _confirmPasswordFocused = false;
-  
+
   // ✅ NUEVOS: Estados para registro
   bool _isLoading = false;
   String _errorMessage = '';
@@ -227,30 +227,13 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                   ),
                   child: Column(
                     children: [
-                      // Logo circular con borde elegante
-                      Container(
+                      // Logo: mostrar la imagen tal cual (sin recorte circular)
+                      SizedBox(
                         width: 120,
                         height: 120,
-                        decoration: BoxDecoration(
-                          shape: BoxShape.circle,
-                          border: Border.all(
-                            color: colorPrimario.withOpacity(0.2),
-                            width: 3,
-                          ),
-                          boxShadow: [
-                            BoxShadow(
-                              color: colorPrimario.withOpacity(0.1),
-                              spreadRadius: 2,
-                              blurRadius: 8,
-                              offset: const Offset(0, 2),
-                            ),
-                          ],
-                        ),
-                        child: ClipOval(
-                          child: FlexibleImage(
-                              source: 'assets/LogoPinequitas.png',
-                              fit: BoxFit.cover,
-                            ),
+                        child: FlexibleImage(
+                          source: 'assets/Pedidos.png',
+                          fit: BoxFit.contain,
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -404,7 +387,7 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: _isLoading 
+                        child: _isLoading
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,

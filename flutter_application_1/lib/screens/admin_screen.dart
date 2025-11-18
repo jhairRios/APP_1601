@@ -29,30 +29,13 @@ class _AdminScreenState extends State<AdminScreen> {
         foregroundColor: Colors.white,
         title: Row(
           children: [
-            // Logo circular con borde elegante
-            Container(
+            // Logo: mostrar la imagen tal cual (sin recorte circular)
+            SizedBox(
               width: 40,
               height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                border: Border.all(
-                  color: Colors.white.withOpacity(0.3),
-                  width: 2,
-                ),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    spreadRadius: 1,
-                    blurRadius: 4,
-                    offset: const Offset(0, 1),
-                  ),
-                ],
-              ),
-              child: ClipOval(
-                child: FlexibleImage(
-                  source: 'assets/LogoPinequitas.png',
-                  fit: BoxFit.cover,
-                ),
+              child: FlexibleImage(
+                source: 'assets/Pedidos.png',
+                fit: BoxFit.contain,
               ),
             ),
             const SizedBox(width: 12),
