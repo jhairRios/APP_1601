@@ -30,6 +30,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     }
     return 'No Disponible';
   }
+
   // State fields
   List<Map<String, dynamic>> categorias = <Map<String, dynamic>>[];
   int? categoriaSeleccionada;
@@ -40,7 +41,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   late StreamSubscription<Map<String, dynamic>> _orderSubscription;
   List<Map<String, dynamic>> _recentOrders = [];
   bool _showHistory = false; // false = hide delivered by default
-  
+
   int _pendingOrderCount = 0; // contador de pedidos nuevos no leídos
   Timer? _pollTimer;
   List<Map<String, dynamic>> _repartidores = [];
@@ -67,88 +68,109 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
       _fetchMenuItems();
     });
-        // Escuchar nuevos pedidos creados en la app (cliente)
-        // Nota: para mostrar únicamente los pedidos desde la BD, no insertamos
-        // los pedidos recibidos por stream en `_recentOrders`. En su lugar,
-        // actualizamos un contador y opcionalmente forzamos una recarga desde
-        // el servidor cuando sea necesario.
-        _orderSubscription = OrderService.orderStream.listen((order) {
-          try {
-            // ignore: avoid_print
-            print('empleado: received order (stream) -> ${order.toString()}');
-            if (!mounted) return;
+    // Escuchar nuevos pedidos creados en la app (cliente)
+    // Nota: para mostrar únicamente los pedidos desde la BD, no insertamos
+    // los pedidos recibidos por stream en `_recentOrders`. En su lugar,
+    // actualizamos un contador y opcionalmente forzamos una recarga desde
+    // el servidor cuando sea necesario.
+    _orderSubscription = OrderService.orderStream.listen((order) {
+      try {
+        // ignore: avoid_print
+        print('empleado: received order (stream) -> ${order.toString()}');
+        if (!mounted) return;
 
-            // Normalize incoming order (the stream sends a Map<String,dynamic>)
-            Map<String, dynamic> normOrder = {};
-            try {
-              normOrder = _normalizeOrder(Map<String, dynamic>.from(order as Map));
-            } catch (_) {
-              normOrder = {};
-            }
+        // Normalize incoming order (the stream sends a Map<String,dynamic>)
+        Map<String, dynamic> normOrder = {};
+        try {
+          normOrder = _normalizeOrder(Map<String, dynamic>.from(order as Map));
+        } catch (_) {
+          normOrder = {};
+        }
 
-            final isDel = _isDelivered(normOrder);
+        final isDel = _isDelivered(normOrder);
 
-            setState(() {
-              if (!isDel) {
-                // Pending or in-progress: ensure it's present in recent orders (pending view)
-                final oid = (normOrder['order_id'] ?? normOrder['ID_Pedido'] ?? normOrder['id'] ?? normOrder['ID'] ?? '').toString();
-                _recentOrders.removeWhere((o) {
-                  final existingId = (o['order_id'] ?? o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? '').toString();
-                  return existingId == oid;
-                });
-                _recentOrders.insert(0, normOrder);
-                // increment visual counter for new pending orders
-                _pendingOrderCount = (_pendingOrderCount) + 1;
-              } else {
-                // Delivered: if the employee is viewing history, insert/update the history list
-                final oid = (normOrder['order_id'] ?? normOrder['ID_Pedido'] ?? normOrder['id'] ?? normOrder['ID'] ?? '').toString();
-                // always remove any existing instance
-                _recentOrders.removeWhere((o) {
-                  final existingId = (o['order_id'] ?? o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? '').toString();
-                  return existingId == oid;
-                });
-                if (_showHistory) {
-                  _recentOrders.insert(0, normOrder);
-                }
-              }
+        setState(() {
+          if (!isDel) {
+            // Pending or in-progress: ensure it's present in recent orders (pending view)
+            final oid =
+                (normOrder['order_id'] ??
+                        normOrder['ID_Pedido'] ??
+                        normOrder['id'] ??
+                        normOrder['ID'] ??
+                        '')
+                    .toString();
+            _recentOrders.removeWhere((o) {
+              final existingId =
+                  (o['order_id'] ?? o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? '')
+                      .toString();
+              return existingId == oid;
             });
-
-            // Save cache and refresh repartidores counters
-            try { _saveRecentOrdersCache(); } catch (_) {}
-            _loadRepartidores();
-
-            // Show a notification with quick action to view
-            if (mounted) {
-              WidgetsBinding.instance.addPostFrameCallback((_) {
-                try {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        isDel ? 'Pedido entregado: ' + ((normOrder['order_id'] ?? '') .toString()) : 'Nuevo pedido recibido',
-                      ),
-                      duration: const Duration(seconds: 3),
-                      action: SnackBarAction(
-                        label: 'Ver',
-                        onPressed: () {
-                          if (!mounted) return;
-                          setState(() {
-                            _selectedIndex = 2; // ir a Pedidos
-                            _pendingOrderCount = 0; // marcar como leído
-                          });
-                          // Forzar recarga desde servidor al abrir Pedidos
-                          _pollPendingOrders();
-                        },
-                      ),
-                    ),
-                  );
-                } catch (_) {}
-              });
+            _recentOrders.insert(0, normOrder);
+            // increment visual counter for new pending orders
+            _pendingOrderCount = (_pendingOrderCount) + 1;
+          } else {
+            // Delivered: if the employee is viewing history, insert/update the history list
+            final oid =
+                (normOrder['order_id'] ??
+                        normOrder['ID_Pedido'] ??
+                        normOrder['id'] ??
+                        normOrder['ID'] ??
+                        '')
+                    .toString();
+            // always remove any existing instance
+            _recentOrders.removeWhere((o) {
+              final existingId =
+                  (o['order_id'] ?? o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? '')
+                      .toString();
+              return existingId == oid;
+            });
+            if (_showHistory) {
+              _recentOrders.insert(0, normOrder);
             }
-          } catch (e) {
-            // ignore: avoid_print
-            print('empleado: order subscription error: $e');
           }
         });
+
+        // Save cache and refresh repartidores counters
+        try {
+          _saveRecentOrdersCache();
+        } catch (_) {}
+        _loadRepartidores();
+
+        // Show a notification with quick action to view
+        if (mounted) {
+          WidgetsBinding.instance.addPostFrameCallback((_) {
+            try {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    isDel
+                        ? 'Pedido entregado: ' +
+                              ((normOrder['order_id'] ?? '').toString())
+                        : 'Nuevo pedido recibido',
+                  ),
+                  duration: const Duration(seconds: 3),
+                  action: SnackBarAction(
+                    label: 'Ver',
+                    onPressed: () {
+                      if (!mounted) return;
+                      setState(() {
+                        _selectedIndex = 2; // ir a Pedidos
+                        _pendingOrderCount = 0; // marcar como leído
+                      });
+                      // Forzar recarga desde servidor al abrir Pedidos
+                      _pollPendingOrders();
+                    },
+                  ),
+                ),
+              );
+            } catch (_) {}
+          });
+        }
+      } catch (e) {
+        // ignore: avoid_print
+        print('empleado: order subscription error: $e');
+      }
+    });
     // Cargar cache local de pedidos recientes (si existe), antes de empezar polling
     _loadRecentOrdersCache().then((_) {
       // Iniciar polling periódico para detectar pedidos pendientes desde el servidor
@@ -195,12 +217,18 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       final resp = await http.post(
         Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'action': 'get_all_orders', 'limit': 10000, 'offset': 0}),
+        body: json.encode({
+          'action': 'get_all_orders',
+          'limit': 10000,
+          'offset': 0,
+        }),
       );
       // Debug: print response status and body to help troubleshooting
       try {
         // ignore: avoid_print
-        print('[empleado] _pollPendingOrders: status=${resp.statusCode} body=${resp.body}');
+        print(
+          '[empleado] _pollPendingOrders: status=${resp.statusCode} body=${resp.body}',
+        );
       } catch (_) {}
       if (resp.statusCode != 200) return;
       final decoded = json.decode(resp.body);
@@ -219,12 +247,16 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       if (ordersRaw.isEmpty) return;
       try {
         // ignore: avoid_print
-        print('[empleado] _pollPendingOrders: fetched ${ordersRaw.length} ordersRaw entries');
+        print(
+          '[empleado] _pollPendingOrders: fetched ${ordersRaw.length} ordersRaw entries',
+        );
       } catch (_) {}
 
       // Normalize and replace _recentOrders with the list fetched from the DB
       final fetched = List<Map<String, dynamic>>.from(
-        ordersRaw.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}),
+        ordersRaw.map(
+          (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
+        ),
       );
 
       final normalizedList = fetched.reversed
@@ -488,7 +520,9 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               _recentOrders[idx]['status'] = status;
             }
           });
-          try { _saveRecentOrdersCache(); } catch (_) {}
+          try {
+            _saveRecentOrdersCache();
+          } catch (_) {}
           // Notificar a otras pantallas en la app
           try {
             final notify = {'order_id': sanitizedOrderId, 'status': status};
@@ -1902,8 +1936,6 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     const Color colorNaranja = Color.fromARGB(255, 255, 152, 0);
     const Color colorAzul = Color.fromARGB(255, 33, 150, 243);
 
-    
-
     return Scaffold(
       backgroundColor: colorFondo,
       appBar: AppBar(
@@ -1932,7 +1964,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               ),
               child: ClipOval(
                 child: FlexibleImage(
-                  source: 'assets/LogoPinequitas.png',
+                  source: 'assets/Pedidos.png',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -2377,7 +2409,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     // Mostrar absolutamente todos los pedidos tal cual vienen de la BD
     // (sin filtrar por estado ni por entregado). Esto es intencional: el
     // código de filtrado se conserva comentado más abajo para uso futuro.
-    final List<Map<String, dynamic>> displayOrders = List<Map<String, dynamic>>.from(_recentOrders);
+    final List<Map<String, dynamic>> displayOrders =
+        List<Map<String, dynamic>>.from(_recentOrders);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -2418,21 +2451,21 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
           const SizedBox(height: 20),
 
-              // Botón refrescar (filtros removidos: mostrar todos los pedidos disponibles)
-              Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  IconButton(
-                    onPressed: () {
-                      // refrescar manualmente (traer desde servidor)
-                      _pollPendingOrders();
-                      _loadRepartidores();
-                    },
-                    icon: const Icon(Icons.refresh),
-                    tooltip: 'Refrescar pedidos',
-                  ),
-                ],
+          // Botón refrescar (filtros removidos: mostrar todos los pedidos disponibles)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.end,
+            children: [
+              IconButton(
+                onPressed: () {
+                  // refrescar manualmente (traer desde servidor)
+                  _pollPendingOrders();
+                  _loadRepartidores();
+                },
+                icon: const Icon(Icons.refresh),
+                tooltip: 'Refrescar pedidos',
               ),
+            ],
+          ),
 
           const SizedBox(height: 20),
 
@@ -2444,25 +2477,35 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                   children: [
                     const SizedBox(height: 8),
                     Text(
-                      _showHistory ? 'Historial de entregados' : 'Pedidos recientes',
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                      _showHistory
+                          ? 'Historial de entregados'
+                          : 'Pedidos recientes',
+                      style: const TextStyle(
+                        fontSize: 16,
+                        fontWeight: FontWeight.bold,
+                      ),
                     ),
                     const SizedBox(height: 8),
                     Column(
                       children: displayOrders.map((o) {
-                        final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
+                        final normalized = _normalizeOrder(
+                          Map<String, dynamic>.from(o),
+                        );
                         final orderNumber =
                             normalized['order_id']?.toString() ?? 'Pedido';
                         final customer =
                             normalized['customer']?.toString() ?? 'Cliente';
                         final table = normalized['table']?.toString() ?? '';
-                        final ubicacion = normalized['ubicacion']?.toString() ?? '';
+                        final ubicacion =
+                            normalized['ubicacion']?.toString() ?? '';
                         final isDelivery = ubicacion.isNotEmpty;
-                        final status = normalized['status']?.toString() ?? 'Pendiente';
+                        final status =
+                            normalized['status']?.toString() ?? 'Pendiente';
                         final total = normalized['total'] != null
                             ? '\$${normalized['total']}'
                             : '\$0.00';
-                        final payment = normalized['payment_method']?.toString() ?? '';
+                        final payment =
+                            normalized['payment_method']?.toString() ?? '';
                         return _buildOrderCard(
                           orderNumber,
                           customer,
@@ -2552,53 +2595,64 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
           // Use orders coming from the server (_recentOrders) and derive
           // the set of "ready" orders here instead of depending on a
           // separate `_pendingOrdersList` variable which may be missing.
-          Builder(builder: (context) {
-            final readyOrders = _recentOrders.where((o) {
-              try {
-                final n = _normalizeOrder(Map<String, dynamic>.from(o));
-                final s = (n['status'] ?? '').toString().toLowerCase();
-                // Consider common labels for ready orders
-                return s.contains('listo') || s.contains('ready') || s.contains('list');
-              } catch (_) {
-                return false;
-              }
-            }).toList();
+          Builder(
+            builder: (context) {
+              final readyOrders = _recentOrders.where((o) {
+                try {
+                  final n = _normalizeOrder(Map<String, dynamic>.from(o));
+                  final s = (n['status'] ?? '').toString().toLowerCase();
+                  // Consider common labels for ready orders
+                  return s.contains('listo') ||
+                      s.contains('ready') ||
+                      s.contains('list');
+                } catch (_) {
+                  return false;
+                }
+              }).toList();
 
-            if (readyOrders.isEmpty) {
-              return Container(
-                padding: const EdgeInsets.symmetric(vertical: 12),
-                alignment: Alignment.center,
-                child: Text(
-                  'No hay pedidos listos para asignar',
-                  style: TextStyle(color: Colors.grey[600]),
-                ),
-              );
-            }
-
-            return ListView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: readyOrders.length,
-              itemBuilder: (context, index) {
-                final o = readyOrders[index];
-                final normalized = _normalizeOrder(Map<String, dynamic>.from(o));
-                final orderId = normalized['order_id']?.toString() ?? 'Pedido';
-                final addr = (normalized['ubicacion']?.toString() ?? '').isNotEmpty
-                    ? normalized['ubicacion']!.toString()
-                    : (normalized['table']?.toString() ?? '');
-                final customer = normalized['customer']?.toString() ?? 'Cliente';
-                final total = normalized['total'] != null ? '\$${normalized['total']}' : '\$0.00';
-                return _buildReadyOrderCard(
-                  orderId,
-                  addr,
-                  customer,
-                  total,
-                  colorPrimario,
-                  colorAzul,
+              if (readyOrders.isEmpty) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(vertical: 12),
+                  alignment: Alignment.center,
+                  child: Text(
+                    'No hay pedidos listos para asignar',
+                    style: TextStyle(color: Colors.grey[600]),
+                  ),
                 );
-              },
-            );
-          }),
+              }
+
+              return ListView.builder(
+                shrinkWrap: true,
+                physics: const NeverScrollableScrollPhysics(),
+                itemCount: readyOrders.length,
+                itemBuilder: (context, index) {
+                  final o = readyOrders[index];
+                  final normalized = _normalizeOrder(
+                    Map<String, dynamic>.from(o),
+                  );
+                  final orderId =
+                      normalized['order_id']?.toString() ?? 'Pedido';
+                  final addr =
+                      (normalized['ubicacion']?.toString() ?? '').isNotEmpty
+                      ? normalized['ubicacion']!.toString()
+                      : (normalized['table']?.toString() ?? '');
+                  final customer =
+                      normalized['customer']?.toString() ?? 'Cliente';
+                  final total = normalized['total'] != null
+                      ? '\$${normalized['total']}'
+                      : '\$0.00';
+                  return _buildReadyOrderCard(
+                    orderId,
+                    addr,
+                    customer,
+                    total,
+                    colorPrimario,
+                    colorAzul,
+                  );
+                },
+              );
+            },
+          ),
         ],
       ),
     );
@@ -2696,8 +2750,6 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-  
-
   // Función _isDelivered original (comentada para conservar la lógica
   // futura). Actualmente la reemplazamos por un stub mínimo para que la
   // vista muestre todos los pedidos sin filtrar.
@@ -2779,7 +2831,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
               Row(
                 children: [
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 8,
+                      vertical: 4,
+                    ),
                     decoration: BoxDecoration(
                       color: _getStatusColor(status).withOpacity(0.1),
                       borderRadius: BorderRadius.circular(6),
@@ -2795,45 +2850,65 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
                   ),
                   const SizedBox(width: 8),
                   // detect assigned repartidor from rawOrder (different keys possible)
-                  Builder(builder: (_) {
-                    try {
-                      if (rawOrder == null) return const SizedBox.shrink();
-                      String? rep;
-                      for (final k in rawOrder.keys) {
-                        final lk = k.toString().toLowerCase();
-                        if (lk.contains('repart') || lk.contains('deliver') || lk.contains('driver')) {
-                          final v = rawOrder[k];
-                          if (v != null && v.toString().trim().isNotEmpty && v.toString() != '0') {
-                            rep = v.toString();
-                            break;
+                  Builder(
+                    builder: (_) {
+                      try {
+                        if (rawOrder == null) return const SizedBox.shrink();
+                        String? rep;
+                        for (final k in rawOrder.keys) {
+                          final lk = k.toString().toLowerCase();
+                          if (lk.contains('repart') ||
+                              lk.contains('deliver') ||
+                              lk.contains('driver')) {
+                            final v = rawOrder[k];
+                            if (v != null &&
+                                v.toString().trim().isNotEmpty &&
+                                v.toString() != '0') {
+                              rep = v.toString();
+                              break;
+                            }
                           }
                         }
-                      }
-                      if (rep == null) return const SizedBox.shrink();
-                      // show simple badge with optional short name/id
-                      final short = rep.length > 18 ? rep.substring(0, 18) + '…' : rep;
-                      return Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.orange.withOpacity(0.12),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Colors.orange.withOpacity(0.2)),
-                        ),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.person, size: 12, color: Colors.orange),
-                            const SizedBox(width: 6),
-                            Text(
-                              'Asignado: $short',
-                              style: const TextStyle(fontSize: 12, color: Colors.orange),
+                        if (rep == null) return const SizedBox.shrink();
+                        // show simple badge with optional short name/id
+                        final short = rep.length > 18
+                            ? rep.substring(0, 18) + '…'
+                            : rep;
+                        return Container(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 8,
+                            vertical: 4,
+                          ),
+                          decoration: BoxDecoration(
+                            color: Colors.orange.withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(
+                              color: Colors.orange.withOpacity(0.2),
                             ),
-                          ],
-                        ),
-                      );
-                    } catch (_) {
-                      return const SizedBox.shrink();
-                    }
-                  }),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.person,
+                                size: 12,
+                                color: Colors.orange,
+                              ),
+                              const SizedBox(width: 6),
+                              Text(
+                                'Asignado: $short',
+                                style: const TextStyle(
+                                  fontSize: 12,
+                                  color: Colors.orange,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      } catch (_) {
+                        return const SizedBox.shrink();
+                      }
+                    },
+                  ),
                 ],
               ),
             ],
@@ -2940,7 +3015,8 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   }
 
   Future<void> _showRepartidorDetails(Map<String, dynamic> r) async {
-    final name = (r['Nombre'] ?? r['nombre'] ?? r['name'] ?? 'Repartidor').toString();
+    final name = (r['Nombre'] ?? r['nombre'] ?? r['name'] ?? 'Repartidor')
+        .toString();
     // Show a simple details dialog. The original implementation fetched
     // assigned orders; keep this lightweight to avoid reintroducing API
     // dependencies here. If you want the full details back, I can restore

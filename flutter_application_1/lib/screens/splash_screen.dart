@@ -63,7 +63,10 @@ class _SplashScreenState extends State<SplashScreen>
     final password = prefs.getString('saved_password');
     if (email == null || password == null) return;
     try {
-      final resp = await http.post(Uri.parse(API_BASE_URL), body: {'email': email, 'password': password});
+      final resp = await http.post(
+        Uri.parse(API_BASE_URL),
+        body: {'email': email, 'password': password},
+      );
       if (resp.statusCode == 200) {
         final data = json.decode(resp.body);
         if (data['success'] == true) {
@@ -92,7 +95,9 @@ class _SplashScreenState extends State<SplashScreen>
               routeDestination = '/cliente';
           }
           Navigator.pushReplacementNamed(context, routeDestination);
-          ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Bienvenido, $userName')));
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('Bienvenido, $userName')));
         } else {
           // fallback to login screen
           Navigator.pushReplacement(
@@ -140,7 +145,7 @@ class _SplashScreenState extends State<SplashScreen>
               ),
               child: ClipOval(
                 child: FlexibleImage(
-                  source: 'assets/LogoPinequitas.png',
+                  source: 'assets/Pedidos.png',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -149,7 +154,7 @@ class _SplashScreenState extends State<SplashScreen>
             FadeTransition(
               opacity: _animation,
               child: const Text(
-                'Bienvenido a las Pinequitas',
+                'Bienvenido a Pedidos 1601',
                 style: TextStyle(
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
@@ -169,7 +174,10 @@ class _SplashScreenState extends State<SplashScreen>
                   ),
                   TextButton(
                     onPressed: () {
-                      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => const LoginScreen()));
+                      Navigator.pushReplacement(
+                        context,
+                        MaterialPageRoute(builder: (_) => const LoginScreen()),
+                      );
                     },
                     child: const Text('Usar otra cuenta'),
                   ),

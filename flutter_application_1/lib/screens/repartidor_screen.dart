@@ -68,7 +68,7 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               ),
               child: ClipOval(
                 child: FlexibleImage(
-                  source: 'assets/LogoPinequitas.png',
+                  source: 'assets/Pedidos.png',
                   fit: BoxFit.cover,
                 ),
               ),
@@ -208,7 +208,9 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         if (mounted) Navigator.of(context).pop();
       } catch (_) {}
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Error: $e')));
+        ScaffoldMessenger.of(
+          context,
+        ).showSnackBar(SnackBar(content: Text('Error: $e')));
       }
     }
   }
@@ -405,7 +407,9 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
     try {
       _orderSubscription = OrderService.orderStream.listen((order) {
         try {
-          debugPrint('[repartidor] received order notify -> ${order.toString()}');
+          debugPrint(
+            '[repartidor] received order notify -> ${order.toString()}',
+          );
           // Mostrar notificación local pero NO forzar recarga automática
           // para que el repartidor controle cuándo refrescar.
           WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -1059,7 +1063,10 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
   Future<void> _saveOrderCaches() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.setString('pending_orders_cache', json.encode(_pendingOrders));
+      await prefs.setString(
+        'pending_orders_cache',
+        json.encode(_pendingOrders),
+      );
       await prefs.setString('my_orders_cache', json.encode(_myOrders));
     } catch (e) {
       debugPrint('[repartidor] _saveOrderCaches failed: $e');
@@ -1075,7 +1082,11 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         final parsed = json.decode(p);
         if (parsed is List) {
           setState(() {
-            _pendingOrders = List<Map<String, dynamic>>.from(parsed.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}));
+            _pendingOrders = List<Map<String, dynamic>>.from(
+              parsed.map(
+                (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
+              ),
+            );
           });
         }
       }
@@ -1083,7 +1094,11 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         final parsed = json.decode(m);
         if (parsed is List) {
           setState(() {
-            _myOrders = List<Map<String, dynamic>>.from(parsed.map((e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e}));
+            _myOrders = List<Map<String, dynamic>>.from(
+              parsed.map(
+                (e) => e is Map ? Map<String, dynamic>.from(e) : {'value': e},
+              ),
+            );
           });
         }
       }
@@ -1209,16 +1224,22 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         final updated = decoded['order'];
         if (updated != null && updated is Map) {
           final up = Map<String, dynamic>.from(updated);
-          final oid = (up['ID_Pedido'] ?? up['id'] ?? up['ID'] ?? up['order_id'] ?? '').toString();
+          final oid =
+              (up['ID_Pedido'] ?? up['id'] ?? up['ID'] ?? up['order_id'] ?? '')
+                  .toString();
           setState(() {
             // remover de pendientes
             _pendingOrders.removeWhere((o) {
-              final existingId = (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '').toString();
+              final existingId =
+                  (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '')
+                      .toString();
               return existingId == oid;
             });
             // agregar a mis pedidos si no existe
             final exists = _myOrders.any((o) {
-              final existingId = (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '').toString();
+              final existingId =
+                  (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '')
+                      .toString();
               return existingId == oid;
             });
             if (!exists) {
@@ -1226,14 +1247,27 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
             } else {
               // actualizar si ya existía
               for (int i = 0; i < _myOrders.length; i++) {
-                final existingId = (_myOrders[i]['ID_Pedido'] ?? _myOrders[i]['id'] ?? _myOrders[i]['ID'] ?? _myOrders[i]['order_id'] ?? '').toString();
-                if (existingId == oid) { _myOrders[i] = up; break; }
+                final existingId =
+                    (_myOrders[i]['ID_Pedido'] ??
+                            _myOrders[i]['id'] ??
+                            _myOrders[i]['ID'] ??
+                            _myOrders[i]['order_id'] ??
+                            '')
+                        .toString();
+                if (existingId == oid) {
+                  _myOrders[i] = up;
+                  break;
+                }
               }
             }
           });
-          try { await _saveOrderCaches(); } catch (_) {}
+          try {
+            await _saveOrderCaches();
+          } catch (_) {}
           // notificar a otros listeners locales (empleado/cliente en mismo dispositivo)
-          try { OrderService.notifyNewOrder(up); } catch (_) {}
+          try {
+            OrderService.notifyNewOrder(up);
+          } catch (_) {}
         } else {
           await _loadPendingOrders();
           await _loadMyOrders();
@@ -1285,12 +1319,20 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
         final updated = decoded['order'];
         if (updated != null && updated is Map) {
           final up = Map<String, dynamic>.from(updated);
-          final oid = (up['ID_Pedido'] ?? up['id'] ?? up['ID'] ?? up['order_id'] ?? '').toString();
+          final oid =
+              (up['ID_Pedido'] ?? up['id'] ?? up['ID'] ?? up['order_id'] ?? '')
+                  .toString();
           setState(() {
             // intentar actualizar en mis pedidos
             var updatedInMy = false;
             for (int i = 0; i < _myOrders.length; i++) {
-              final existingId = (_myOrders[i]['ID_Pedido'] ?? _myOrders[i]['id'] ?? _myOrders[i]['ID'] ?? _myOrders[i]['order_id'] ?? '').toString();
+              final existingId =
+                  (_myOrders[i]['ID_Pedido'] ??
+                          _myOrders[i]['id'] ??
+                          _myOrders[i]['ID'] ??
+                          _myOrders[i]['order_id'] ??
+                          '')
+                      .toString();
               if (existingId == oid) {
                 _myOrders[i] = up;
                 updatedInMy = true;
@@ -1304,13 +1346,23 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
             // Also remove from pending if status moved past available
             if (status == 'En Camino' || status == 'Entregado') {
               _pendingOrders.removeWhere((o) {
-                final existingId = (o['ID_Pedido'] ?? o['id'] ?? o['ID'] ?? o['order_id'] ?? '').toString();
+                final existingId =
+                    (o['ID_Pedido'] ??
+                            o['id'] ??
+                            o['ID'] ??
+                            o['order_id'] ??
+                            '')
+                        .toString();
                 return existingId == oid;
               });
             }
           });
-          try { await _saveOrderCaches(); } catch (_) {}
-          try { OrderService.notifyNewOrder(up); } catch (_) {}
+          try {
+            await _saveOrderCaches();
+          } catch (_) {}
+          try {
+            OrderService.notifyNewOrder(up);
+          } catch (_) {}
         } else {
           await _loadMyOrders();
         }
@@ -1446,7 +1498,10 @@ class _RepartidorScreenState extends State<RepartidorScreen> {
               const SizedBox(width: 8),
               Expanded(
                 child: ElevatedButton.icon(
-                  onPressed: (orderId == null || status == 'En Camino' || status == 'Entregado')
+                  onPressed:
+                      (orderId == null ||
+                          status == 'En Camino' ||
+                          status == 'Entregado')
                       ? (orderId == null ? null : () async {})
                       : () async {
                           // iniciar recorrido -> poner En Camino

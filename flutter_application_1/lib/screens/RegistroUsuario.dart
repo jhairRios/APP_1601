@@ -28,7 +28,7 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
   bool _emailFocused = false;
   bool _passwordFocused = false;
   bool _confirmPasswordFocused = false;
-  
+
   // ✅ NUEVOS: Estados para registro
   bool _isLoading = false;
   String _errorMessage = '';
@@ -248,9 +248,9 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                         ),
                         child: ClipOval(
                           child: FlexibleImage(
-                              source: 'assets/LogoPinequitas.png',
-                              fit: BoxFit.cover,
-                            ),
+                            source: 'assets/Pedidos.png',
+                            fit: BoxFit.cover,
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -404,7 +404,7 @@ class _RegistroUsuarioScreenState extends State<RegistroUsuarioScreen> {
                             borderRadius: BorderRadius.circular(16),
                           ),
                         ),
-                        child: _isLoading 
+                        child: _isLoading
                             ? const SizedBox(
                                 width: 20,
                                 height: 20,

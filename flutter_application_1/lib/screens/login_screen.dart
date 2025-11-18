@@ -832,7 +832,7 @@ class _LoginScreenState extends State<LoginScreen> {
                       ),
                       child: ClipOval(
                         child: FlexibleImage(
-                          source: 'assets/LogoPinequitas.png',
+                          source: 'assets/Pedidos.png',
                           fit: BoxFit.cover,
                         ),
                       ),

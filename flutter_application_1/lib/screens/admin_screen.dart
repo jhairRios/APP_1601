@@ -50,7 +50,7 @@ class _AdminScreenState extends State<AdminScreen> {
               ),
               child: ClipOval(
                 child: FlexibleImage(
-                  source: 'assets/LogoPinequitas.png',
+                  source: 'assets/Pedidos.png',
                   fit: BoxFit.cover,
                 ),
               ),
