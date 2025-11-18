@@ -388,7 +388,7 @@ try {
         try {
             // Si se envía archivo multipart 'imagen_file', guardarlo dentro de assets/Menu
             if (isset($_FILES['imagen_file']) && $_FILES['imagen_file']['error'] === UPLOAD_ERR_OK) {
-                $uploadDir = __DIR__ . '/../assets/Menu';
+                $uploadDir = __DIR__ . 'app1601.ngrok.app/Aplicacion_1/APP1601/APP_1601/flutter_application_1/assets/Menu';
                 if (!is_dir($uploadDir)) mkdir($uploadDir, 0755, true);
                 $tmpName = $_FILES['imagen_file']['tmp_name'];
                 $origName = basename($_FILES['imagen_file']['name']);
@@ -442,7 +442,7 @@ try {
             $newPlatillo = $platillo !== null ? $platillo : $oldPlatillo;
             $newImagen = $imagen !== null ? $imagen : $oldImagen;
 
-            $assetsDir = __DIR__ . '/../assets/Menu';
+            $assetsDir = __DIR__ . '/app1601.ngrok.app/Aplicacion_1/APP1601/APP_1601/flutter_application_1/assests/Menu';
             if (!is_dir($assetsDir)) mkdir($assetsDir, 0755, true);
 
             // Si llega un nuevo archivo multipart, guardarlo con el nombre del platillo nuevo
