@@ -40,7 +40,7 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
   late StreamSubscription<Map<String, dynamic>> _orderSubscription;
   List<Map<String, dynamic>> _recentOrders = [];
   bool _showHistory = false; // false = hide delivered by default
-  String _statusFilter = 'Todos';
+  
   int _pendingOrderCount = 0; // contador de pedidos nuevos no leídos
   Timer? _pollTimer;
   List<Map<String, dynamic>> _repartidores = [];
@@ -53,14 +53,15 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     3: 'Entregado',
   };
   // Which numeric codes should be considered 'delivered' and therefore show in historial
-  final List<int> _deliveredStatusCodes = const [3];
+  // (comentado: filtrado deshabilitado temporalmente)
+  // final List<int> _deliveredStatusCodes = const [3];
 
   @override
   void initState() {
     super.initState();
     _fetchCategorias();
     // Cargar preferencia de mostrar historial (persistida)
-    _loadShowHistory();
+    // historial persistente removido (filtros eliminados)
     _fetchMenuItems();
     // Suscribirse a cambios en el menú para refrescar automáticamente
     _menuSubscription = MenuService.menuChangeController.stream.listen((_) {
@@ -189,10 +190,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
   Future<void> _pollPendingOrders() async {
     try {
+      // Pedimos TODOS los pedidos al backend para mostrar absolutamente todo.
+      // Usamos el endpoint admin `get_all_orders` con un límite alto.
       final resp = await http.post(
         Uri.parse(API_BASE_URL),
         headers: {'Content-Type': 'application/json'},
-        body: json.encode({'action': 'get_pending_orders', 'include_assigned': true}),
+        body: json.encode({'action': 'get_all_orders', 'limit': 10000, 'offset': 0}),
       );
       // Debug: print response status and body to help troubleshooting
       try {
@@ -285,48 +288,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     }
   }
 
-  // Persistir la preferencia de mostrar historial entre sesiones
-  Future<void> _loadShowHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'empleado_show_history';
-      final val = prefs.getBool(key) ?? false;
-      if (!mounted) return;
-      setState(() {
-        _showHistory = val;
-      });
-    } catch (e) {
-      // ignore
-    }
-  }
+  // Historial persistente y toggles relacionados removidos.
 
-  Future<void> _saveShowHistory() async {
-    try {
-      final prefs = await SharedPreferences.getInstance();
-      final key = 'empleado_show_history';
-      await prefs.setBool(key, _showHistory);
-    } catch (e) {
-      // ignore
-    }
-  }
-
-  void _toggleShowHistory() {
-    setState(() {
-      _showHistory = !_showHistory;
-    });
-    try {
-      _saveShowHistory();
-    } catch (_) {}
-    // If turning on history, fetch historical orders from server (admin endpoint)
-    if (_showHistory) {
-      _loadHistoryOrders();
-    } else {
-      // when hiding history, refresh pending orders from server
-      _pollPendingOrders();
-    }
-  }
-
-  // Cargar pedidos históricos (entregados) usando el endpoint admin `get_all_orders`
+  // Cargar pedidos históricos (comentado): la funcionalidad de filtrado por
+  // historial está deshabilitada temporalmente. Conservamos la implementación
+  // original aquí comentada para referencia futura.
+  /*
   Future<void> _loadHistoryOrders() async {
     try {
       final resp = await http.post(
@@ -362,6 +329,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     } catch (e) {
       // ignore
     }
+  }
+  */
+
+  // Stub temporal: la carga de historial está desactivada.
+  Future<void> _loadHistoryOrders() async {
+    return Future.value();
   }
 
   Future<void> _loadRecentOrdersCache() async {
@@ -2398,48 +2371,13 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
   // ✅ TOMAR PEDIDOS
   Widget _buildTomarPedidos(Color colorPrimario, Color colorNaranja) {
-    // preparar lista mostrada: por defecto ocultar entregados; si _showHistory==true
-    // mostrar sólo pedidos entregados (historial)
-    bool matchesFilter(Map<String, dynamic> src) {
-      try {
-        final n = _normalizeOrder(Map<String, dynamic>.from(src));
-        final statusRaw = (n['status'] ?? '').toString().toLowerCase();
-        final low = statusRaw;
-        if (_statusFilter == 'Todos') return true;
-        switch (_statusFilter) {
-          case 'Pendientes':
-            return low.contains('pend') || low.contains('confirm');
-          case 'En Preparación':
-            return low.contains('prepar');
-          case 'Listos':
-            return low.contains('listo');
-          case 'En Entrega':
-            return low.contains('camino') || low.contains('entreg') || low.contains('en camino');
-          case 'Entregados':
-            return _isDelivered(n);
-          case 'Cancelados':
-            return low.contains('cancel');
-          default:
-            return true;
-        }
-      } catch (_) {
-        return true;
-      }
-    }
-
-    final List<Map<String, dynamic>> displayOrders = _recentOrders.where((o) {
-      try {
-        final n = _normalizeOrder(Map<String, dynamic>.from(o));
-        if (_showHistory) {
-          // when showing history, ignore the status filter and show delivered orders
-          return _isDelivered(n);
-        } else {
-          return !_isDelivered(n) && matchesFilter(o);
-        }
-      } catch (_) {
-        return true;
-      }
-    }).toList();
+    // Mostrar la lista completa de pedidos respaldados por la BD.
+    // Si _showHistory==true mostramos solo pedidos entregados; si no, mostramos
+    // todos los pedidos que no están entregados (disponibles) sin aplicar filtros.
+    // Mostrar absolutamente todos los pedidos tal cual vienen de la BD
+    // (sin filtrar por estado ni por entregado). Esto es intencional: el
+    // código de filtrado se conserva comentado más abajo para uso futuro.
+    final List<Map<String, dynamic>> displayOrders = List<Map<String, dynamic>>.from(_recentOrders);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(20),
@@ -2480,35 +2418,10 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
 
           const SizedBox(height: 20),
 
-              // Filtros de estado con mejor scroll + botón refrescar
+              // Botón refrescar (filtros removidos: mostrar todos los pedidos disponibles)
               Row(
+                mainAxisAlignment: MainAxisAlignment.end,
                 children: [
-                  Expanded(
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.symmetric(horizontal: 4),
-                      child: Row(
-                        children: [
-                          _buildStatusChip('Todos', colorPrimario),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('Pendientes', colorNaranja),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('En Preparación', Colors.blue),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('Listos', Colors.green),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('En Entrega', Colors.purple),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('Entregados', Colors.grey),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('Cancelados', Colors.red),
-                          const SizedBox(width: 8),
-                          _buildStatusChip('Historial', Colors.teal),
-                        ],
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
                   IconButton(
                     onPressed: () {
                       // refrescar manualmente (traer desde servidor)
@@ -2783,39 +2696,12 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
     );
   }
 
-  Widget _buildStatusChip(String label, Color color) {
-    final bool isSelected = label == 'Historial' ? _showHistory : (_statusFilter == label);
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          if (label == 'Historial') {
-            _toggleShowHistory();
-          } else {
-            _statusFilter = label;
-            // when selecting normal filters, hide historial
-            _showHistory = false;
-            _saveShowHistory();
-          }
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-        decoration: BoxDecoration(
-          color: isSelected ? color : Colors.white,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: isSelected ? color : Colors.grey[300]!),
-        ),
-        child: Text(
-          label,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.grey[700],
-            fontWeight: FontWeight.w500,
-          ),
-        ),
-      ),
-    );
-  }
+  
 
+  // Función _isDelivered original (comentada para conservar la lógica
+  // futura). Actualmente la reemplazamos por un stub mínimo para que la
+  // vista muestre todos los pedidos sin filtrar.
+  /*
   bool _isDelivered(Map<String, dynamic> normalized) {
     final raw = (normalized['status'] ?? normalized['Estado_Pedido'] ?? normalized['estado'] ?? '') .toString();
     final low = raw.toLowerCase().trim();
@@ -2836,6 +2722,13 @@ class _EmpleadoScreenState extends State<EmpleadoScreen> {
       return true;
     }
     return low == 'entregado' || low == 'finalizado';
+  }
+  */
+
+  // Stub temporal: no considera ningún pedido como 'entregado', lo que
+  // permite mostrar todos los pedidos en la vista del empleado.
+  bool _isDelivered(Map<String, dynamic> normalized) {
+    return false;
   }
 
   // Nota: en la vista de empleado, las tarjetas de platillos se generan

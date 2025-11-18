@@ -711,6 +711,8 @@ try {
     // ----------------------- OBTENER TODO EL HISTORIAL DE PEDIDOS (ADMIN / EMPLEADO) -----------------------
     if ($action === 'get_all_orders') {
         $limit = isset($input_data['limit']) ? intval($input_data['limit']) : 1000;
+        // Asegurar que sea un entero positivo y con un tope razonable
+        $limit = max(1, min($limit, 10000));
         try {
             $colsStmt = $pdo->prepare("SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME = 'pedidos'");
             $colsStmt->execute([$dbname]);
@@ -719,9 +721,11 @@ try {
             foreach ($cols as $c) { $low = strtolower($c); if (in_array($low, ['id_pedido','idpedidos','id','id_pedidos'])) { $idCol = $c; break; } }
             if ($idCol === null && count($cols) > 0) $idCol = $cols[0];
 
-            $sql = "SELECT * FROM pedidos ORDER BY {$idCol} DESC LIMIT ?";
+            $sql = "SELECT * FROM pedidos ORDER BY {$idCol} ASC LIMIT ?";
             $stmt = $pdo->prepare($sql);
-            $stmt->execute([$limit]);
+            // Vincular explícitamente como entero para evitar que MySQL reciba comillas
+            $stmt->bindValue(1, $limit, PDO::PARAM_INT);
+            $stmt->execute();
             $rows = $stmt->fetchAll(PDO::FETCH_ASSOC);
             echo json_encode(['success' => true, 'orders' => $rows]);
         } catch (PDOException $e) {
